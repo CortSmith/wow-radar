@@ -1,14 +1,45 @@
 # Nearby Tracker (companion app for WoW Forever)
 
-Reads the game's combat log file while you play and shows a live, local-only web page with:
+Reads the game's combat log file while you play and shows a radar-style web page with:
 
 - every player the log has mentioned, split into **Friendly** and **Neutral / hostile**,
 - a radar-style map with a pin at the last place each player was detected, which moves when they are detected again,
 - click a name or a pin to copy `/target First Last`, then paste it into WoW chat yourself.
 
-It only reads a text file and serves a page on `127.0.0.1`. It never sends anything to the game.
+It only reads a text file. It never sends anything to the game.
 
-## Run
+## Three versions in this folder
+
+| Version | Folder | What it is | Docs |
+|---|---|---|---|
+| **Python** | `nearby_tracker.py`, `start.bat` | The original. One script, nothing to install but Python. Local-only page on `127.0.0.1:8777`. Includes the Heatmap. | This file, below |
+| **Go** | `go-radar/` | Desktop app (single `radar.exe`, WebView2 window). Adds persistent history and tracks, player search, bounty ranking and per-server rule-sets (normal, PvP, RP, RP-PvP). | [go-radar/README.md](go-radar/README.md) |
+| **Cloud** | `radar-cloud/` | The Go app's features as a hosted AWS (CDK) site: log in with username, password and API key, store history, tracks and bounty in your own account, view from any browser. Logs are parsed in the browser and only small per-player summaries are uploaded. Built to cost well under $1/month. | [radar-cloud/README.md](radar-cloud/README.md) |
+
+Shared pieces: the `maps/` folder (zone images, made with `extract_maps.py`) is used by all three. The cloud
+version ships a compressed WebP copy of the maps in `radar-cloud/site/maps/`.
+
+Not every feature exists in every version:
+
+| Feature | Python | Go | Cloud |
+|---|---|---|---|
+| Live radar from the log file | yes | yes | yes (Chrome/Edge folder watching) |
+| Zone map images | yes | yes | yes |
+| Heatmap | yes | no | no |
+| History, tracks, search | no | yes | yes |
+| Bounty ranking, rule-sets | no | yes | yes |
+| Accounts / API keys / stored in the cloud | no | no | yes |
+| Static ads column | no | no | yes |
+
+### Try the cloud version without AWS
+Double-click `radar-cloud\run-local.bat` (add `--sim` for simulated live data), then open
+`http://127.0.0.1:8787` and log in with `demo` / `demo-password-1` and API key `dev-key-0001`. It needs no npm,
+only a `node` executable (it falls back to the one bundled with VS Code). Deploying to AWS is covered in
+[radar-cloud/README.md](radar-cloud/README.md); nothing has been deployed yet.
+
+## Python version
+
+### Run
 1. In game: `/combatlog` (also make sure Advanced Combat Logging is on, it carries the positions).
 2. Install Python 3.9+ if you don't have it. Nothing else to install.
 3. Double-click `start.bat` (or `python nearby_tracker.py`). Your browser opens `http://127.0.0.1:8777/`.
@@ -21,7 +52,7 @@ Options: `--port 8777`, `--keep 60` (forget players unseen for N minutes), `--fr
 current log), `--realm-suffix -PvP-US` (normally auto-detected), `--dump` (print every parsed event, for
 checking the format), `--no-browser`.
 
-## Reading the page
+### Reading the page
 - **Names:** the log writes `Mc-Cheeki-PvP-US`. The realm part is detected and removed and `-` becomes a space,
   so you get the in-game name `Mc Cheeki`.
 - **Solid dot = exact position.** The log gives a unit's coordinates only on events where that unit is the
@@ -38,7 +69,7 @@ checking the format), `--no-browser`.
   A player's flag can change between events, and the newest one is used. Check one name in game to confirm
   which group is which faction for you.
 
-## Zone maps (personal use)
+### Zone maps (personal use)
 The page shows the map image of the zone you are in and switches when you change zone (the log's `MAP_CHANGE`
 line gives the zone name, and the image is stretched to the zone's coordinate rectangle). Untick **Map** to hide it.
 
@@ -54,7 +85,7 @@ Use `--no-overlays` to skip that. Zones already done are skipped; zones saved wi
 - Zones missing from `maps` simply show no image. Dots, names and heat are always drawn above the map.
 - For your own use only; don't share the extracted images.
 
-## Heatmap (where players probably are now)
+### Heatmap (where players probably are now)
 Turn it on with **Heatmap** and pick whose blobs to show (Neutral / hostile by default).
 - Each player with a known position gets one small blob (about 25 yd across the map, kept small on screen).
 - **Red = just seen, shifting to blue as time passes, gone after 5 minutes.** The last minute fades out.
@@ -70,7 +101,7 @@ Turn it on with **Heatmap** and pick whose blobs to show (Neutral / hostile by d
 - It is a heuristic, not a real tracker: it can't know about turns, mounts or stealth between events.
 - Dots and names are always drawn above the heat.
 
-## Limits
+### Limits
 - Only players who do something (cast, hit, buff, die) ever show up. Silent bystanders are invisible to the log.
-- Map artwork only appears after you run `extract_maps.py` (see below). Without it you get the zone outline and a grid.
+- Map artwork only appears after you run `extract_maps.py` (see "Zone maps" above). Without it you get the zone outline and a grid.
 - Positions are only valid within one zone, so the page shows pins for your current zone.
