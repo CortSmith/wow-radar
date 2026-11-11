@@ -30,6 +30,7 @@ Not every feature exists in every version:
 | Bounty ranking, rule-sets | no | yes | yes |
 | Accounts / API keys / stored in the cloud | no | no | yes |
 | Static ads column | no | no | yes |
+| Timestamps stored as UTC, shown in your chosen time zone | no | no | yes |
 
 ### Try the cloud version without AWS
 Double-click `radar-cloud\run-local.bat` (add `--sim` for simulated live data), then open

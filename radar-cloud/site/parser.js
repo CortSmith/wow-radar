@@ -1,220 +1,408 @@
-"use strict";
-// Port of go-radar/internal/{parser,ruleset}. Pure functions: loaded by worker.js (importScripts) and by node (require).
-// Layout: f[0]=event f[1..4]=src guid,name,flags,raid f[5..8]=dst; then event prefix params, then (advanced logging)
-// a 19 field "info unit" block: 0 guid,1 owner,2 hp,3 maxhp,...,14 X,15 Y,16 uiMapID,17 facing,18 level.
+'use strict';
+/**
+ * parser.js - single responsibility: turn WoW combat-log text into event objects, and decode names and rule-sets.
+ *
+ * Port of go-radar/internal/{parser,ruleset}. Pure functions, no DOM: loaded by worker.js (importScripts), the page
+ * and node.
+ * Public API (Radar.parser): parseLine(line, fallbackZone) -> LogEvent|null, parseTime(text, fallbackZone) -> UTC unix
+ * ms (offset and zone rules live in time-zone.js), splitCSV, kindOf, isMine, reactionOf,
+ * Namer (raw "First-Last-Realm" -> display name), parseRuleset, detectFromRawName, RULESETS, DEFAULT_RS, KIND_*, ADV.
+ *
+ * Line layout: f[0]=event f[1..4]=src guid,name,flags,raid f[5..8]=dst; then event prefix params, then (advanced
+ * logging)
+ * a 19 field "info unit" block: 0 guid,1 owner,2 hp,3 maxhp,...,14 X,15 Y,16 uiMapID,17 facing,18 level.
+ */
 (function (g) {
-  const ADV = 19;
-  const KIND_OTHER = 0, KIND_PLAYER = 1, KIND_NPC = 2, KIND_PET = 3;
+  const dep = (name, file) =>
+    typeof require !== 'undefined' && typeof module !== 'undefined' ? require(file) : g.Radar[name];
+  const CFG = dep('config', './config.js');
+  const TZ = dep('timeZone', './time-zone.js');
+  const PC = CFG.parser;
+  const ADV = PC.ADV_FIELDS;
+  const KIND_OTHER = 0,
+    KIND_PLAYER = 1,
+    KIND_NPC = 2,
+    KIND_PET = 3;
 
   function kindOf(guid) {
-    if (guid.startsWith("Player-")) return KIND_PLAYER;
-    if (guid.startsWith("Creature-") || guid.startsWith("Vehicle-")) return KIND_NPC;
-    if (guid.startsWith("Pet-")) return KIND_PET;
+    if (guid.startsWith('Player-')) return KIND_PLAYER;
+    if (guid.startsWith('Creature-') || guid.startsWith('Vehicle-')) return KIND_NPC;
+    if (guid.startsWith('Pet-')) return KIND_PET;
     return KIND_OTHER;
   }
-  const isMine = (flags) => (flags & 0x1) !== 0;
+  const isMine = flags => (flags & 0x1) !== 0;
   function reactionOf(fl) {
-    if (fl & 0x11) return "friendly";
-    if (fl & 0x40) return "hostile";
-    if (fl & 0x20) return "neutral";
-    return "unknown";
+    if (fl & 0x11) return 'friendly';
+    if (fl & 0x40) return 'hostile';
+    if (fl & 0x20) return 'neutral';
+    return 'unknown';
   }
 
-  // "M/D/YYYY HH:MM:SS.mmm[+-H[:MM]]" -> unix ms, NaN if bad (no offset = local time of the browser).
-  function parseTime(s) {
-    const sp = s.indexOf(" ");
-    if (sp < 0) return NaN;
-    const d = s.slice(0, sp).split("/");
-    if (d.length !== 3) return NaN;
-    let clock = s.slice(sp + 1), off = 0, has = false;
-    const k = Math.max(clock.lastIndexOf("+"), clock.lastIndexOf("-"));
-    if (k > 0) {
-      const o = clock.slice(k);
-      clock = clock.slice(0, k);
-      const parts = o.slice(1).split(":");
-      const h = Number(parts[0]), m = parts[1] ? Number(parts[1]) : 0;
-      if (!isFinite(h) || !isFinite(m)) return NaN;
-      off = (o[0] === "-" ? -1 : 1) * (h * 3600 + m * 60);
-      has = true;
-    }
-    const dot = clock.indexOf(".");
-    const secs = dot < 0 ? clock : clock.slice(0, dot), frac = dot < 0 ? "" : clock.slice(dot + 1);
-    const hms = secs.split(":");
-    if (hms.length !== 3) return NaN;
-    const mo = +d[0], dd = +d[1], y = +d[2], hh = +hms[0], mm = +hms[1], ss = +hms[2];
-    if (!(mo >= 1 && mo <= 12 && dd >= 1 && dd <= 31 && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59 && ss >= 0 && ss <= 60 && y > 0)) return NaN;
-    const ms = frac ? parseInt(frac.slice(0, 3).padEnd(3, "0"), 10) : 0;
-    if (has) return Date.UTC(y, mo - 1, dd, hh, mm, ss, ms) - off * 1000;
-    return new Date(y, mo - 1, dd, hh, mm, ss, ms).getTime();
-  }
+  /**
+   * "M/D/YYYY HH:MM:SS.mmm[+-H[:MM]]" to unix ms (UTC instant); see time-zone.js for the offset and DST rules.
+   * @param {string} s log timestamp
+   * @param {string} [fallbackZone] IANA zone for lines without an offset; omitted means the browser's own zone
+   * @returns {number} unix ms, NaN when malformed
+   */
+  const parseTime = (s, fallbackZone) => TZ.parseLogTimestamp(s, fallbackZone);
 
-  // Splits on commas honouring double quotes ("" escapes a quote); null when malformed.
-  function splitCSV(s) {
-    if (s.indexOf('"') < 0) return s.split(",");
-    const out = [];
-    let pos = 0;
-    for (;;) {
-      if (pos < s.length && s[pos] === '"') {
-        let b = "", closed = false;
-        pos++;
-        while (pos < s.length) {
-          const c = s[pos];
-          if (c === '"') {
-            if (s[pos + 1] === '"') { b += '"'; pos += 2; continue; }
-            pos++; closed = true; break;
-          }
-          b += c; pos++;
-        }
-        if (!closed) return null;
-        out.push(b);
-        if (pos >= s.length) return out;
-        if (s[pos] !== ",") return null;
+  /**
+   * Read a double-quoted CSV field starting at the opening quote ("" is an escaped quote).
+   * @param {string} s
+   * @param {number} pos index of the opening quote
+   * @returns {{value: string, next: number}|null} next = index after the closing quote; null when unterminated
+   */
+  function readQuoted(s, pos) {
+    let value = '';
+    pos++;
+    while (pos < s.length) {
+      const c = s[pos];
+      if (c !== '"') {
+        value += c;
         pos++;
         continue;
       }
-      const next = s.indexOf(",", pos);
-      if (next < 0) { out.push(s.slice(pos)); return out; }
+      if (s[pos + 1] === '"') {
+        value += '"';
+        pos += 2;
+        continue;
+      }
+      return { value, next: pos + 1 };
+    }
+    return null;
+  }
+
+  /**
+   * Split on commas honouring double quotes.
+   * @param {string} s
+   * @returns {string[]|null} fields, or null when malformed
+   */
+  function splitCSV(s) {
+    if (s.indexOf('"') < 0) return s.split(',');
+    const out = [];
+    let pos = 0;
+    for (;;) {
+      if (s[pos] === '"') {
+        const quoted = readQuoted(s, pos);
+        if (!quoted) return null;
+        out.push(quoted.value);
+        if (quoted.next >= s.length) return out;
+        if (s[quoted.next] !== ',') return null;
+        pos = quoted.next + 1;
+        continue;
+      }
+      const next = s.indexOf(',', pos);
+      if (next < 0) {
+        out.push(s.slice(pos));
+        return out;
+      }
       out.push(s.slice(pos, next));
       pos = next + 1;
     }
   }
 
-  const isEmptyGuid = (x) => x === "" || x === "0000000000000000" || x === "nil";
-  function parseHex(s) { const v = parseInt(String(s).replace(/^0[xX]/, ""), 16); return isFinite(v) ? v >>> 0 : 0; }
+  const isEmptyGuid = x => x === '' || x === '0000000000000000' || x === 'nil';
+  function parseHex(s) {
+    const v = parseInt(String(s).replace(/^0[xX]/, ''), PC.HEX_RADIX);
+    return isFinite(v) ? v >>> 0 : 0;
+  }
   function unitAt(f, i) {
-    let guid = f[i], name = f[i + 1];
-    if (isEmptyGuid(guid)) guid = "";
-    if (name === "nil") name = "";
+    let guid = f[i],
+      name = f[i + 1];
+    if (isEmptyGuid(guid)) guid = '';
+    if (name === 'nil') name = '';
     return { guid, name, flags: parseHex(f[i + 2]) };
   }
+  /**
+   * Number of event-prefix parameters before the info block (swing 0, environmental 1, spell/range/shield 3); -1 for
+   * events without a known prefix.
+   * @param {number} t time in unix ms
+   * @returns {*} the computed value
+   */
   function prefixLen(t) {
-    if (t.startsWith("SWING_")) return 0;
-    if (t.startsWith("ENVIRONMENTAL_")) return 1;
-    if (t.startsWith("SPELL_") || t.startsWith("RANGE_") || t === "DAMAGE_SHIELD" || t === "DAMAGE_SPLIT" || t === "DAMAGE_SHIELD_MISSED") return 3;
+    if (t.startsWith('SWING_')) return PC.PREFIX_NONE;
+    if (t.startsWith('ENVIRONMENTAL_')) return PC.PREFIX_ENVIRONMENTAL;
+    if (
+      t.startsWith('SPELL_') ||
+      t.startsWith('RANGE_') ||
+      t === 'DAMAGE_SHIELD' ||
+      t === 'DAMAGE_SPLIT' ||
+      t === 'DAMAGE_SHIELD_MISSED'
+    )
+      return PC.PREFIX_SPELL;
     return -1;
   }
   function isDamage(t) {
-    if (t === "DAMAGE_SHIELD" || t === "DAMAGE_SPLIT") return true;
-    return t.endsWith("_DAMAGE") && !t.endsWith("_LANDED");
+    if (t === 'DAMAGE_SHIELD' || t === 'DAMAGE_SPLIT') return true;
+    return t.endsWith('_DAMAGE') && !t.endsWith('_LANDED');
   }
+  /**
+   * Decode the advanced-logging info block starting at s (hp, owner, position in world yards, map id, level); null
+   * when it is not a unit block.
+   * @param {Object} f fix
+   * @param {Object} s the s
+   * @returns {*} the computed value
+   */
   function parseInfo(f, s) {
     if (s + ADV > f.length || kindOf(f[s]) === KIND_OTHER) return null;
-    const in_ = { guid: f[s], owner: "", hp: 0, maxHp: 0, hasHp: false, x: 0, y: 0, mapId: 0, level: 0, hasPos: false };
+    const in_ = { guid: f[s], owner: '', hp: 0, maxHp: 0, hasHp: false, x: 0, y: 0, mapId: 0, level: 0, hasPos: false };
     if (!isEmptyGuid(f[s + 1])) in_.owner = f[s + 1];
-    const hp = parseFloat(f[s + 2]), mx = parseFloat(f[s + 3]);
-    if (isFinite(hp) && isFinite(mx) && f[s + 2] !== "" && f[s + 3] !== "") { in_.hp = hp; in_.maxHp = mx; in_.hasHp = true; }
-    const x = parseFloat(f[s + 14]), y = parseFloat(f[s + 15]), mp = Number(f[s + 16]);
-    if (isFinite(x) && isFinite(y) && f[s + 16] !== "" && Number.isInteger(mp)) { in_.x = x; in_.y = y; in_.mapId = mp; in_.hasPos = true; }
-    in_.level = parseInt(f[s + 18], 10) || 0;
+    const hp = parseFloat(f[s + PC.INFO_HP]),
+      mx = parseFloat(f[s + PC.INFO_MAX_HP]);
+    if (isFinite(hp) && isFinite(mx) && f[s + PC.INFO_HP] !== '' && f[s + PC.INFO_MAX_HP] !== '') {
+      in_.hp = hp;
+      in_.maxHp = mx;
+      in_.hasHp = true;
+    }
+    const x = parseFloat(f[s + PC.INFO_X]),
+      y = parseFloat(f[s + PC.INFO_Y]),
+      mp = Number(f[s + PC.INFO_MAP]);
+    if (isFinite(x) && isFinite(y) && f[s + PC.INFO_MAP] !== '' && Number.isInteger(mp)) {
+      in_.x = x;
+      in_.y = y;
+      in_.mapId = mp;
+      in_.hasPos = true;
+    }
+    in_.level = parseInt(f[s + PC.INFO_LEVEL], PC.DECIMAL_RADIX) || 0;
     return in_;
   }
 
-  // Returns an event object or null for unparsable lines.
-  function parseLine(line) {
-    if (line.charCodeAt(line.length - 1) === 13) line = line.slice(0, -1);
-    const i = line.indexOf("  ");
+  /**
+   * Event object with every field at its neutral value, so consumers never test for missing properties.
+   * @param {number} t time in unix ms
+   * @param {string} type the type
+   */
+  const emptyEvent = (t, type) => ({
+    t,
+    type,
+    src: null,
+    dst: null,
+    info: null,
+    amount: 0,
+    hasAmount: false,
+    isDamage: false,
+    isHeal: false,
+    zone: '',
+    map: null,
+    advanced: null,
+    unconscious: false,
+  });
+
+  /**
+   * MAP_CHANGE,id,name,x0,x1,y0,y1 -> the chart rectangle (corners may come in either order).
+   * @param {Object} f fix
+   * @returns {*} the computed value
+   */
+  function parseChart(f) {
+    if (f.length < PC.MAP_CHANGE_FIELDS) return null;
+    const id = parseInt(f[1], 10),
+      a = parseFloat(f[3]),
+      b = parseFloat(f[4]),
+      c = parseFloat(f[5]),
+      d = parseFloat(f[6]);
+    if (![id, a, b, c, d].every(isFinite)) return null;
+    return { id, name: f[2], x0: Math.min(a, b), x1: Math.max(a, b), y0: Math.min(c, d), y1: Math.max(c, d) };
+  }
+
+  /**
+   * Events that carry no units: logging version, zone and chart changes. Returns true when ev was a meta event.
+   * @param {Object} ev parsed log event
+   * @param {Object} f fix
+   * @returns {*} the computed value
+   */
+  function fillMetaEvent(ev, f) {
+    switch (ev.type) {
+      case 'COMBAT_LOG_VERSION':
+        for (let k = 1; k + 1 < f.length; k++) if (f[k] === 'ADVANCED_LOG_ENABLED') ev.advanced = f[k + 1] === '1';
+        return true;
+      case 'ZONE_CHANGE':
+        if (f.length > 2) ev.zone = f[2];
+        return true;
+      case 'MAP_CHANGE':
+        ev.map = parseChart(f);
+        return true;
+    }
+    return false;
+  }
+
+  /**
+   * Events without a fixed prefix (e.g. UNIT_DIED): scan for the first info block that carries a position.
+   * @param {Object} f fix
+   * @returns {*} the computed value
+   */
+  function scanInfoWithPosition(f) {
+    for (let k = PC.FIELD_PARAMS; k + ADV <= f.length; k++) {
+      const n = parseInfo(f, k);
+      if (n && n.hasPos) return n;
+    }
+    return null;
+  }
+
+  /**
+   * Damage/heal amount sits right after the (optional) info block.
+   * @param {Object} ev parsed log event
+   * @param {Object} f fix
+   * @param {Object} idx the idx
+   */
+  function fillAmount(ev, f, idx) {
+    if (idx >= f.length || f[idx] === '') return;
+    const v = Number(f[idx]);
+    if (isFinite(v)) {
+      ev.amount = v;
+      ev.hasAmount = true;
+    }
+  }
+
+  /**
+   * Returns an event object or null for unparsable lines; event.t is a UTC instant in unix ms.
+   * @param {string} line the line
+   * @param {string} [fallbackZone] IANA zone for a timestamp without an offset (see time-zone.js)
+   * @returns {*} the computed value
+   */
+  function parseLine(line, fallbackZone) {
+    if (line.charCodeAt(line.length - 1) === PC.CARRIAGE_RETURN) line = line.slice(0, -1);
+    const i = line.indexOf('  ');
     if (i < 0) return null;
-    const t = parseTime(line.slice(0, i));
+    const t = parseTime(line.slice(0, i), fallbackZone);
     if (!isFinite(t)) return null;
     const f = splitCSV(line.slice(i + 2));
-    if (!f || !f.length || f[0] === "") return null;
-    const ev = { t, type: f[0], src: null, dst: null, info: null, amount: 0, hasAmount: false, isDamage: false, isHeal: false, zone: "", map: null, advanced: null, unconscious: false };
-    switch (ev.type) {
-      case "COMBAT_LOG_VERSION":
-        for (let k = 1; k + 1 < f.length; k++) if (f[k] === "ADVANCED_LOG_ENABLED") ev.advanced = f[k + 1] === "1";
-        return ev;
-      case "ZONE_CHANGE":
-        if (f.length > 2) ev.zone = f[2];
-        return ev;
-      case "MAP_CHANGE":
-        if (f.length >= 7) {
-          const id = parseInt(f[1], 10), a = parseFloat(f[3]), b = parseFloat(f[4]), c = parseFloat(f[5]), d = parseFloat(f[6]);
-          if ([id, a, b, c, d].every(isFinite)) ev.map = { id, name: f[2], x0: Math.min(a, b), x1: Math.max(a, b), y0: Math.min(c, d), y1: Math.max(c, d) };
-        }
-        return ev;
-    }
-    if (f.length < 9) return ev;
-    ev.src = unitAt(f, 1);
-    ev.dst = unitAt(f, 5);
-    if (ev.type === "UNIT_DIED" && f.length > 9 && f[9] === "1") ev.unconscious = true;
-    const prefix = prefixLen(ev.type), start = 9 + prefix;
-    if (prefix >= 0) ev.info = parseInfo(f, start);
-    else {
-      for (let k = 9; k + ADV <= f.length; k++) {
-        const n = parseInfo(f, k);
-        if (n && n.hasPos) { ev.info = n; break; }
-      }
-    }
+    if (!f || !f.length || f[0] === '') return null;
+    const ev = emptyEvent(t, f[0]);
+    if (fillMetaEvent(ev, f) || f.length < PC.FIELD_PARAMS) return ev;
+    ev.src = unitAt(f, PC.FIELD_SRC);
+    ev.dst = unitAt(f, PC.FIELD_DST);
+    if (ev.type === 'UNIT_DIED' && f.length > PC.FIELD_PARAMS && f[PC.FIELD_PARAMS] === '1') ev.unconscious = true;
+    const prefix = prefixLen(ev.type),
+      start = PC.FIELD_PARAMS + prefix;
+    ev.info = prefix >= 0 ? parseInfo(f, start) : scanInfoWithPosition(f);
     ev.isDamage = isDamage(ev.type);
-    ev.isHeal = ev.type === "SPELL_HEAL" || ev.type === "SPELL_PERIODIC_HEAL";
-    if (prefix >= 0 && (ev.isDamage || ev.isHeal)) {
-      const idx = start + (ev.info ? ADV : 0);
-      if (idx < f.length && f[idx] !== "") {
-        const v = Number(f[idx]);
-        if (isFinite(v)) { ev.amount = v; ev.hasAmount = true; }
-      }
-    }
+    ev.isHeal = ev.type === 'SPELL_HEAL' || ev.type === 'SPELL_PERIODIC_HEAL';
+    if (prefix >= 0 && (ev.isDamage || ev.isHeal)) fillAmount(ev, f, start + (ev.info ? ADV : 0));
     return ev;
   }
 
-  // ---- Namer: raw "First-Last-PvP-US" -> "First Last"; shared realm suffix detected once >= 6 distinct names agree ----
-  const MIN_NAMES = 6;
+  // ---- Namer: raw "First-Last-PvP-US" -> "First Last"; shared realm suffix detected once >= 6 distinct names agree
+  // ----
+  const MIN_NAMES = CFG.parser.NAMER_MIN_NAMES;
+  /**
+   * Longest "-Part-Part" tail shared by all raw names (the realm), or "" when they share none.
+   * @param {Array} names the names
+   * @returns {*} the computed value
+   */
   function commonSuffix(names) {
-    if (!names.length) return "";
-    const lists = names.map((n) => n.split("-"));
+    if (!names.length) return '';
+    const lists = names.map(n => n.split('-'));
     let shortest = Infinity;
     for (const l of lists) if (l.length < shortest) shortest = l.length;
     let best = [];
     for (let k = 1; k < shortest; k++) {
       const tail = lists[0].slice(-k);
-      if (!lists.every((l) => l.slice(-k).every((tk, j) => tk === tail[j]))) break;
+      if (!lists.every(l => l.slice(-k).every((tk, j) => tk === tail[j]))) break;
       best = tail;
     }
-    return best.length ? "-" + best.join("-") : "";
+    return best.length ? '-' + best.join('-') : '';
   }
   class Namer {
+    /**
+     * Start unlocked, or locked to a known realm suffix such as "-PvP-US".
+     * @param {Object} realmSuffix the realm suffix
+     */
     constructor(realmSuffix) {
-      this.suffix = ""; this.locked = false; this.seen = new Set(); this.names = [];
-      if (realmSuffix) { this.suffix = realmSuffix[0] === "-" ? realmSuffix : "-" + realmSuffix; this.locked = true; }
+      this.suffix = '';
+      this.locked = false;
+      this.seen = new Set();
+      this.names = [];
+      if (realmSuffix) {
+        this.suffix = realmSuffix[0] === '-' ? realmSuffix : '-' + realmSuffix;
+        this.locked = true;
+      }
     }
+    /**
+     * Learn a raw player name; once enough agree the realm suffix is locked.
+     * @param {string} raw the raw
+     */
     observe(raw) {
       if (this.locked || !raw || this.seen.has(raw)) return;
-      this.seen.add(raw); this.names.push(raw);
+      this.seen.add(raw);
+      this.names.push(raw);
       if (this.names.length < MIN_NAMES) return;
       const s = commonSuffix(this.names);
-      if (s) { this.suffix = s; this.locked = true; this.names = null; this.seen = null; }
+      if (s) {
+        this.suffix = s;
+        this.locked = true;
+        this.names = null;
+        this.seen = null;
+      }
     }
+    /**
+     * Display name: realm suffix removed, dashes turned into spaces.
+     * @param {string} raw the raw
+     * @returns {*} the computed value
+     */
     display(raw) {
       if (this.suffix && raw.endsWith(this.suffix)) raw = raw.slice(0, -this.suffix.length);
-      return raw.split("-").join(" ");
+      return raw.split('-').join(' ');
     }
   }
 
   // ---- ruleset ----
-  const RULESETS = [["normal", "Normal"], ["pvp", "PvP"], ["rp", "RP"], ["rppvp", "RP-PvP"]];
-  const DEFAULT_RS = "pvp";
+  const RULESETS = CFG.rulesets.LIST;
+  const DEFAULT_RS = CFG.rulesets.DEFAULT_ID;
+  /**
+   * Normalise user or log spellings (rp-pvp, rp_pvp, RP PvP) to a ruleset id; "" when unknown.
+   * @param {Object} s the s
+   * @returns {*} the computed value
+   */
   function parseRuleset(s) {
     switch (String(s).toLowerCase().trim()) {
-      case "normal": return "normal";
-      case "pvp": return "pvp";
-      case "rp": return "rp";
-      case "rppvp": case "rp-pvp": case "rp_pvp": case "rp pvp": return "rppvp";
+      case 'normal':
+        return 'normal';
+      case 'pvp':
+        return 'pvp';
+      case 'rp':
+        return 'rp';
+      case 'rppvp':
+      case 'rp-pvp':
+      case 'rp_pvp':
+      case 'rp pvp':
+        return 'rppvp';
     }
-    return "";
+    return '';
   }
-  // Realm token of a raw name "First-Last-PvP-US": only the trailing three '-' parts after the first are considered.
+  /**
+   * Realm token of a raw name "First-Last-PvP-US": only the trailing three '-' parts after the first are considered.
+   * @param {string} raw the raw
+   * @returns {*} the computed value
+   */
   function detectFromRawName(raw) {
-    const parts = raw.split("-");
-    const lo = Math.max(1, parts.length - 3);
+    const parts = raw.split('-');
+    const lo = Math.max(1, parts.length - PC.REALM_TAIL_PARTS);
     for (let i = parts.length - 1; i >= lo; i--) {
-      if (i - 1 >= 1 && parts[i].toLowerCase() === "pvp" && parts[i - 1].toLowerCase() === "rp") return "rppvp";
+      if (i - 1 >= 1 && parts[i].toLowerCase() === 'pvp' && parts[i - 1].toLowerCase() === 'rp') return 'rppvp';
       const id = parseRuleset(parts[i]);
       if (id) return id;
     }
-    return "";
+    return '';
   }
 
-  const api = { ADV, KIND_OTHER, KIND_PLAYER, KIND_NPC, KIND_PET, kindOf, isMine, reactionOf, parseTime, splitCSV, parseLine, Namer, RULESETS, DEFAULT_RS, parseRuleset, detectFromRawName };
-  g.RadarParser = api;
-  if (typeof module !== "undefined" && module.exports) module.exports = api;
-})(typeof self !== "undefined" ? self : globalThis);
+  const api = {
+    ADV,
+    KIND_OTHER,
+    KIND_PLAYER,
+    KIND_NPC,
+    KIND_PET,
+    kindOf,
+    isMine,
+    reactionOf,
+    parseTime,
+    splitCSV,
+    parseLine,
+    Namer,
+    RULESETS,
+    DEFAULT_RS,
+    parseRuleset,
+    detectFromRawName,
+  };
+  (g.Radar || (g.Radar = {})).parser = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof self !== 'undefined' ? self : globalThis);

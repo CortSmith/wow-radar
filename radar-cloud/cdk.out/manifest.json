@@ -1,28 +1,31 @@
 {
   "version": "55.0.0",
   "artifacts": {
-    "RadarCloud.assets": {
+    "RadarStation.assets": {
       "type": "cdk:asset-manifest",
       "properties": {
-        "file": "RadarCloud.assets.json",
+        "file": "RadarStation.assets.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
       }
     },
-    "RadarCloud": {
+    "RadarStation": {
       "type": "aws:cloudformation:stack",
       "environment": "aws://unknown-account/us-east-1",
       "properties": {
-        "templateFile": "RadarCloud.template.json",
+        "templateFile": "RadarStation.template.json",
         "terminationProtection": false,
+        "tags": {
+          "app": "radar"
+        },
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-deploy-role-${AWS::AccountId}-us-east-1",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-cfn-exec-role-${AWS::AccountId}-us-east-1",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-us-east-1/140a678eb8b5ba2860cd4ad94296ba0add2a7cfdad72de8a6f97b933f5934f43.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-${AWS::AccountId}-us-east-1/61c139285fd7f6a0abb7b4aab85f6eef06d7059e6042a687322892257cba3edc.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
-          "RadarCloud.assets"
+          "RadarStation.assets"
         ],
         "lookupRole": {
           "arn": "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-hnb659fds-lookup-role-${AWS::AccountId}-us-east-1",
@@ -31,10 +34,10 @@
         }
       },
       "dependencies": [
-        "RadarCloud.assets"
+        "RadarStation.assets"
       ],
-      "additionalMetadataFile": "RadarCloud.metadata.json",
-      "displayName": "RadarCloud"
+      "additionalMetadataFile": "RadarStation.metadata.json",
+      "displayName": "RadarStation"
     },
     "Tree": {
       "type": "cdk:tree",

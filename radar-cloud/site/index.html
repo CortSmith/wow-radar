@@ -1,89 +1,276 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nearby Radar</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-<header>
-  <div class="title"><span class="dot" id="conn" title="connection"></span><strong>Nearby Radar</strong>
-    <span id="zone" class="muted">-</span></div>
-  <div class="controls">
-    <div id="rulesetBox" class="seg" role="group" aria-label="Server rule-set" title="Server rule-set. Each rule-set has its own history, tracks and bounty ledger. Auto follows the realm type of your character.">
-      <button id="rs-auto" type="button">Auto</button><button id="rs-normal" type="button">Normal</button><button id="rs-pvp" type="button">PvP</button><button id="rs-rp" type="button">RP</button><button id="rs-rppvp" type="button">RP-PvP</button>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Nearby Radar: live and stored positions of nearby players from your combat log."
+    />
+    <title>Nearby Radar</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div class="title">
+        <span class="dot" id="connection-dot" role="img" aria-label="Connection status" title="connection"></span
+        ><strong>Nearby Radar</strong> <span id="zone" class="muted">-</span>
+      </div>
+      <div class="controls">
+        <div
+          id="ruleset-box"
+          class="segmented"
+          role="group"
+          aria-label="Server rule-set"
+          title="Server rule-set: each has its own history, tracks and bounty. Auto follows your realm."
+        >
+          <button id="rs-auto" type="button">Auto</button><button id="rs-normal" type="button">Normal</button
+          ><button id="rs-pvp" type="button">PvP</button><button id="rs-rp" type="button">RP</button
+          ><button id="rs-rppvp" type="button">RP-PvP</button>
+        </div>
+        <div id="chart-box" class="combo" title="Switch the viewed map. Type to narrow the list; Esc closes.">
+          <input
+            id="chart-input"
+            type="text"
+            role="combobox"
+            aria-label="Map"
+            aria-expanded="false"
+            aria-controls="chart-list"
+            aria-autocomplete="list"
+            aria-haspopup="listbox"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="60"
+            placeholder="Map name..."
+          />
+          <ul id="chart-list" role="listbox" aria-label="Maps" hidden></ul>
+        </div>
+        <label title="Radar range in yards (used when Fixed map is off)"
+          >Range <input id="range" type="range" min="40" max="3000" value="300" /><span id="range-value">300</span
+          >y</label
+        >
+        <label><input id="follow" type="checkbox" checked /> Follow me</label>
+        <label><input id="stale" type="checkbox" checked /> Stale</label>
+        <label title="Show friendly players (blue: your own faction)"
+          ><input id="show-blue" type="checkbox" checked /> <span class="swatch friendly"></span>Blue</label
+        >
+        <label title="Show hostile/neutral players (red: the opposing faction)"
+          ><input id="show-red" type="checkbox" checked /> <span class="swatch hostile"></span>Red</label
+        >
+        <label><input id="show-chart" type="checkbox" checked /> Map</label>
+        <label title="Fixed map frame, 0,0 top-left to 100,100. Shift+arrows nudge, +/- scale, 0 resets."
+          ><input id="fixed-chart" type="checkbox" checked /> Fixed map</label
+        >
+        <label
+          for="timezone-input"
+          title="Time zone for every timestamp shown here. Uploaded log times are stored as UTC. Type to search."
+          >Time zone
+          <input
+            id="timezone-input"
+            type="text"
+            list="timezone-choices"
+            aria-label="Time zone"
+            autocomplete="off"
+            spellcheck="false"
+            maxlength="64"
+            placeholder="Browser default"
+          />
+          <datalist id="timezone-choices"></datalist>
+        </label>
+        <label title="Show the stored per-target history panel (key: H)"
+          ><input id="show-history" type="checkbox" /> History</label
+        >
+        <span id="operator-name" class="muted"></span
+        ><button id="logout" type="button" class="header-button">Log out</button>
+      </div>
+    </header>
+    <main>
+      <aside id="ads" aria-label="Advertisements"></aside>
+      <section id="radar-wrap" aria-label="Radar">
+        <canvas id="radar" role="img" aria-label="Radar view of nearby players"></canvas>
+        <div id="tooltip" role="tooltip" hidden></div>
+        <div id="empty-hint" class="muted" role="status">Waiting for combat log events...</div>
+      </section>
+      <aside id="side" aria-label="Players and tools">
+        <div id="search" role="search">
+          <div class="search-row">
+            <label class="visually-hidden" for="search-input">Search player history by name</label>
+            <input
+              id="search-input"
+              type="text"
+              placeholder="Search player history (name)..."
+              autocomplete="off"
+              spellcheck="false"
+              maxlength="100"
+              aria-controls="search-results"
+            />
+            <button
+              id="search-clear"
+              type="button"
+              title="Clear search and track (Esc)"
+              aria-label="Clear search and track"
+              hidden
+            >
+              x
+            </button>
+          </div>
+          <ul id="search-results" aria-label="Search results" hidden></ul>
+          <div id="trail-info" class="muted" role="status" hidden></div>
+        </div>
+        <details id="log-source-panel" open>
+          <summary><strong>Log source</strong> <span id="source-tag" class="ruleset-tag"></span></summary>
+          <div class="button-row">
+            <button
+              id="tail-start"
+              type="button"
+              class="header-button"
+              title="Pick the WoW Logs folder; the newest WoWCombatLog*.txt is followed live (Chrome / Edge)"
+            >
+              Start live</button
+            ><button id="tail-stop" type="button" class="header-button" hidden>Stop</button>
+          </div>
+          <label class="note muted"
+            >Auto-upload every <input id="ping-interval" type="number" min="5" max="3600" value="60" /> s</label
+          >
+          <div id="drop-zone">
+            Drop WoWCombatLog*.txt here or <button id="pick-files" type="button">Choose files</button>
+          </div>
+          <input
+            id="log-file-input"
+            type="file"
+            accept=".txt,text/plain"
+            multiple
+            hidden
+            aria-label="Combat log files"
+          />
+          <div
+            id="ping-progress"
+            role="progressbar"
+            aria-label="Upload progress"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+            hidden
+          >
+            <div id="ping-progress-fill"></div>
+          </div>
+          <div id="ping-status" class="muted" role="status" aria-live="polite"></div>
+          <div id="upload-summary" class="muted" role="status" hidden></div>
+          <div class="note muted">
+            Parsed in your browser; only deltas are sent. Safe to re-upload: a ledger remembers what was ingested.
+          </div>
+        </details>
+        <details id="bounty-panel" open>
+          <summary>
+            <strong>Bounty</strong>
+            <span id="bounty-ruleset" class="ruleset-tag" title="Each server rule-set has its own bounty ledger"></span>
+            <span id="bounty-count" class="muted"></span>
+          </summary>
+          <div class="button-row">
+            <button
+              id="bounty-analyze"
+              type="button"
+              title="Rebuild this rule-set from chosen combat logs (clears its stored data first)"
+            >
+              Analyze logs</button
+            ><span id="bounty-status" class="muted" role="status" aria-live="polite"></span>
+          </div>
+          <input
+            id="bounty-files"
+            type="file"
+            accept=".txt,text/plain"
+            multiple
+            hidden
+            aria-label="Combat log files to analyze"
+          />
+          <div class="note muted">
+            Clears this rule-set's stored data, then re-parses the logs you choose. Pick complete logs.
+          </div>
+          <ol id="bounty-list" aria-label="Bounty ranking"></ol>
+          <div id="bounty-detail" class="muted" hidden></div>
+        </details>
+        <div id="contact-summary" class="muted"></div>
+        <ul id="contact-list" aria-label="Nearby players"></ul>
+      </aside>
+    </main>
+    <section id="history-panel" aria-label="Stored history" hidden>
+      <div class="history-head">
+        <strong>History (stored, hidden by default)</strong><span class="muted" id="history-count"></span>
+      </div>
+      <div class="history-scroll">
+        <table id="history-table">
+          <thead>
+            <tr>
+              <th scope="col">Name</th>
+              <th scope="col">Avg dmg/hit</th>
+              <th scope="col">Avg dmg/event</th>
+              <th scope="col">Avg HP</th>
+              <th scope="col">Max HP</th>
+              <th scope="col">Samples</th>
+              <th scope="col">Last seen</th>
+              <th scope="col">Zone</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <footer class="muted" id="status-footer" role="status"></footer>
+    <div id="auth-overlay" role="dialog" aria-modal="true" aria-labelledby="auth-title" hidden>
+      <form id="auth-form" autocomplete="on">
+        <strong id="auth-title">Log in</strong>
+        <label class="visually-hidden" for="auth-user">Username</label>
+        <input id="auth-user" type="text" placeholder="Username" autocomplete="username" required maxlength="40" />
+        <label class="visually-hidden" for="auth-pass">Password</label>
+        <input id="auth-pass" type="password" placeholder="Password" autocomplete="current-password" required />
+        <label class="visually-hidden" for="auth-key">API key</label>
+        <input id="auth-key" type="password" placeholder="API key" autocomplete="off" required />
+        <div id="auth-error" role="alert"></div>
+        <button type="submit" id="auth-submit">Log in</button>
+        <button type="button" id="auth-toggle">Create account</button>
+      </form>
     </div>
-    <div id="mapbox" class="combo" title="Switch the viewed map. Type to narrow the list; Esc closes.">
-      <input id="mapq" type="text" role="combobox" aria-label="Map" aria-expanded="false" aria-controls="maplist" aria-autocomplete="list" aria-haspopup="listbox" autocomplete="off" spellcheck="false" maxlength="60" placeholder="Map name...">
-      <ul id="maplist" role="listbox" aria-label="Maps" hidden></ul>
-    </div>
-    <label title="Radar range in yards (used when Fixed map is off)">Range <input id="range" type="range" min="40" max="3000" value="300"><span id="rangeVal">300</span>y</label>
-    <label><input id="follow" type="checkbox" checked> Follow me</label>
-    <label><input id="stale" type="checkbox" checked> Stale</label>
-    <label title="Show friendly players (blue: your own faction)"><input id="showBlue" type="checkbox" checked> <span class="sw" style="background:#3b82f6"></span>Blue</label>
-    <label title="Show hostile/neutral players (red: the opposing faction)"><input id="showRed" type="checkbox" checked> <span class="sw" style="background:#ef4444"></span>Red</label>
-    <label><input id="bg" type="checkbox" checked> Map</label>
-    <label title="Fixed map frame: top-left is 0,0 and bottom-right is 100,100. Shift+arrows nudge the map, Shift +/- scale it, Shift+0 resets (per map)."><input id="fit" type="checkbox" checked> Fixed map</label>
-    <label title="Show the stored per-target history panel (key: H)"><input id="showHistory" type="checkbox"> History</label>
-    <span id="user" class="muted"></span><button id="logout" type="button" class="hbtn">Log out</button>
-  </div>
-</header>
-<main>
-  <aside id="ads" aria-label="Advertisements"></aside>
-  <section id="radarWrap"><canvas id="radar"></canvas><div id="tip" hidden></div><div id="empty" class="muted">Waiting for combat log events...</div></section>
-  <aside id="side">
-    <div id="search">
-      <div class="qrow"><input id="q" type="text" placeholder="Search player history (name)..." autocomplete="off" spellcheck="false" maxlength="100"><button id="qclear" type="button" title="Clear search and track (Esc)" hidden>x</button></div>
-      <ul id="results" hidden></ul>
-      <div id="trackInfo" class="muted" hidden></div>
-    </div>
-    <details id="upload" open>
-      <summary><strong>Log source</strong> <span id="srcTag" class="rsTag"></span></summary>
-      <div class="brow"><button id="liveBtn" type="button" class="hbtn" title="Pick the WoW Logs folder; the newest WoWCombatLog*.txt is followed live (Chrome / Edge)">Start live</button><button id="liveStop" type="button" class="hbtn" hidden>Stop</button></div>
-      <label class="bnote muted">Auto-upload every <input id="upSec" type="number" min="5" max="3600" value="60"> s</label>
-      <div id="drop">Drop WoWCombatLog*.txt here or <button id="pick" type="button">Choose files</button></div>
-      <input id="file" type="file" accept=".txt,text/plain" multiple hidden>
-      <div id="bar" hidden><div id="barFill"></div></div>
-      <div id="upStatus" class="muted"></div>
-      <div class="bnote muted">Parsed in your browser; only deltas are sent. Safe to re-upload: a ledger remembers what was ingested.</div>
-    </details>
-    <details id="bounty" open>
-      <summary><strong>Bounty</strong> <span id="bountyRs" class="rsTag" title="Each server rule-set has its own bounty ledger"></span> <span id="bountyCount" class="muted"></span></summary>
-      <div class="brow"><button id="bAnalyze" type="button" title="Rebuild this rule-set's data from the combat logs you choose (clears the stored data of this rule-set first)">Analyze logs</button><span id="bStatus" class="muted"></span></div>
-      <input id="bFiles" type="file" accept=".txt,text/plain" multiple hidden>
-      <div class="bnote muted">Clears this rule-set's stored data, then re-parses the logs you choose. Pick complete logs.</div>
-      <ol id="bountyList"></ol>
-      <div id="bDetail" class="muted" hidden></div>
-    </details>
-    <div id="summary" class="muted"></div>
-    <ul id="list"></ul>
-  </aside>
-</main>
-<section id="history" hidden>
-  <div class="hhead"><strong>History (stored, hidden by default)</strong><span class="muted" id="hcount"></span></div>
-  <div class="hscroll"><table id="htable"><thead><tr>
-    <th>Name</th><th>Avg dmg/hit</th><th>Avg dmg/event</th><th>Avg HP</th><th>Max HP</th><th>Samples</th><th>Last seen</th><th>Zone</th>
-  </tr></thead><tbody></tbody></table></div>
-</section>
-<footer class="muted" id="foot"></footer>
-<div id="auth" hidden>
-  <form id="authForm" autocomplete="on">
-    <strong id="authTitle">Log in</strong>
-    <input id="authUser" type="text" placeholder="Username" autocomplete="username" required maxlength="40">
-    <input id="authPass" type="password" placeholder="Password" autocomplete="current-password" required>
-    <input id="authKey" type="password" placeholder="API key" autocomplete="off" required>
-    <div id="authErr"></div>
-    <button type="submit" id="authGo">Log in</button>
-    <button type="button" id="authToggle">Create account</button>
-  </form>
-</div>
-<script src="parser.js"></script>
-<script src="tracker.js"></script>
-<script src="core.js"></script>
-<script src="radar.js"></script>
-<script src="ingest.js"></script>
-<script src="poller.js"></script>
-<script src="app.js"></script>
-</body>
+    <!-- Load order = dependency order. One global namespace, `Radar` (see ARCHITECTURE.md). -->
+    <script src="config.js"></script>
+    <script src="messages.js"></script>
+    <script src="format.js"></script>
+    <script src="charts.js"></script>
+    <script src="contacts.js"></script>
+    <script src="http.js"></script>
+    <script src="ledger.js"></script>
+    <script src="console-settings.js"></script>
+    <script src="time-zone.js"></script>
+    <script src="parser.js"></script>
+    <script src="tracker.js"></script>
+    <script src="analyzer.js"></script>
+    <script src="engine.js"></script>
+    <script src="engine-protocol.js"></script>
+    <script src="engine-client.js"></script>
+    <script src="ping.js"></script>
+    <script src="tail.js"></script>
+    <script src="sweep.js"></script>
+    <script src="blips.js"></script>
+    <script src="state.js"></script>
+    <script src="view-model.js"></script>
+    <script src="adapters.js"></script>
+    <script src="dom.js"></script>
+    <script src="feedback.js"></script>
+    <script src="session.js"></script>
+    <script src="settings-ui.js"></script>
+    <script src="auth-ui.js"></script>
+    <script src="ruleset-ui.js"></script>
+    <script src="view-controller.js"></script>
+    <script src="contact-panel.js"></script>
+    <script src="search.js"></script>
+    <script src="bounty-panel.js"></script>
+    <script src="history-panel.js"></script>
+    <script src="chart-box.js"></script>
+    <script src="canvas.js"></script>
+    <script src="canvas-input.js"></script>
+    <script src="tail-ui.js"></script>
+    <script src="cloud-sync.js"></script>
+    <script src="ads-ui.js"></script>
+    <script src="operator-flow.js"></script>
+    <script src="app.js"></script>
+  </body>
 </html>

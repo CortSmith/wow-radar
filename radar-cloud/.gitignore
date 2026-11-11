@@ -1,0 +1,32 @@
+# Dependencies and build output
+node_modules/
+cdk.out/
+out/
+cdk.context.json
+*.js.map
+*.tsbuildinfo
+# Compiled TS output (keep config files)
+bin/*.js
+lib/*.js
+test/*.js
+*.d.ts
+!jest.config.js
+
+# Local dev stack (dev/server.mjs): saved table data and background-run logs
+dev/.data.json
+dev/*.out
+dev/*.err
+
+# Secrets / env
+.env
+.env.*
+*.pem
+*.key
+
+# Logs / OS / editors
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

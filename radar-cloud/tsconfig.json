@@ -1,1 +1,12 @@
-{"compilerOptions":{"target":"ES2022","module":"commonjs","lib":["es2022"],"strict":true,"esModuleInterop":true,"skipLibCheck":true,"outDir":"out"},"exclude":["node_modules","out","cdk.out"]}
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["es2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "outDir": "out"
+  },
+  "exclude": ["node_modules", "out", "cdk.out"]
+}

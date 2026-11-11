@@ -2,25 +2,37 @@
   "name": "radar-cloud",
   "version": "1.0.0",
   "private": true,
+  "description": "Serverless radar station: static site + Lambda API + DynamoDB, deployed with CDK.",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "synth": "cdk synth",
     "deploy": "cdk deploy",
-    "test": "node --test test/api.test.mjs && node --require ts-node/register --test test/stack.test.ts && node --test test/site/*.test.js",
+    "test": "npm run test:api && npm run test:stack && npm run test:site",
+    "test:api": "node --test test/api.test.mjs",
+    "test:stack": "node --require ts-node/register --test test/stack.test.ts",
+    "test:site": "node --test test/site/*.test.js",
     "dev": "node dev/server.mjs --demo",
     "dev:sim": "node dev/server.mjs --demo --sim --fresh",
     "smoke": "node dev/smoke.mjs",
-    "sample-log": "node dev/make-sample-log.cjs"
+    "sample-log": "node dev/make-sample-log.cjs",
+    "create-key": "node scripts/create-key.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "node scripts/lint.mjs && npm run format:check && npm run check:docs",
+    "check:docs": "node scripts/check-docs.mjs"
   },
   "devDependencies": {
-    "aws-cdk": "^2.170.0",
-    "aws-cdk-lib": "^2.170.0",
-    "constructs": "^10.4.2",
-    "typescript": "~5.6.0",
-    "ts-node": "^10.9.2",
-    "@types/node": "^22.0.0",
     "@aws-sdk/client-dynamodb": "^3.700.0",
-    "@aws-sdk/lib-dynamodb": "^3.700.0"
+    "@aws-sdk/lib-dynamodb": "^3.700.0",
+    "@types/node": "^22.0.0",
+    "aws-cdk": "^2.170.0",
+    "prettier": "^3.10.0",
+    "ts-node": "^10.9.2",
+    "typescript": "~5.6.0"
   },
   "dependencies": {
     "aws-cdk-lib": "^2.170.0",

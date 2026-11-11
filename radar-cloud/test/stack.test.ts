@@ -1,3 +1,4 @@
+/** CDK assertion tests: the synthesized RadarStack must stay cheap, private and least-privilege (no AWS calls). */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as cdk from 'aws-cdk-lib';
@@ -14,7 +15,10 @@ test('DynamoDB is on-demand, PK/SK, retained, no PITR', () => {
   const t = mk();
   t.hasResourceProperties('AWS::DynamoDB::Table', {
     BillingMode: 'PAY_PER_REQUEST',
-    KeySchema: [{ AttributeName: 'PK', KeyType: 'HASH' }, { AttributeName: 'SK', KeyType: 'RANGE' }],
+    KeySchema: [
+      { AttributeName: 'PK', KeyType: 'HASH' },
+      { AttributeName: 'SK', KeyType: 'RANGE' },
+    ],
   });
   const tables = t.findResources('AWS::DynamoDB::Table');
   for (const r of Object.values(tables) as any[]) {
@@ -25,10 +29,16 @@ test('DynamoDB is on-demand, PK/SK, retained, no PITR', () => {
 
 test('API lambda: arm64, node22, 256MB, env, function URL, no API Gateway', () => {
   const t = mk();
-  t.hasResourceProperties('AWS::Lambda::Function', Match.objectLike({
-    Architectures: ['arm64'], Runtime: 'nodejs22.x', MemorySize: 256, Handler: 'index.handler',
-    Environment: { Variables: Match.objectLike({ MAX_ACCOUNTS_PER_KEY: '5' }) },
-  }));
+  t.hasResourceProperties(
+    'AWS::Lambda::Function',
+    Match.objectLike({
+      Architectures: ['arm64'],
+      Runtime: 'nodejs22.x',
+      MemorySize: 256,
+      Handler: 'index.handler',
+      Environment: { Variables: Match.objectLike({ MAX_ACCOUNTS_PER_KEY: '5' }) },
+    }),
+  );
   t.resourceCountIs('AWS::Lambda::Url', 1);
   t.resourceCountIs('AWS::ApiGatewayV2::Api', 0);
   t.resourceCountIs('AWS::ApiGateway::RestApi', 0);
@@ -47,12 +57,18 @@ test('Lambda can read/write the table but has no wildcard resources or admin act
 test('S3 bucket is private; CloudFront uses OAC, HTTPS redirect, price class 100', () => {
   const t = mk();
   t.hasResourceProperties('AWS::S3::Bucket', {
-    PublicAccessBlockConfiguration: { BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true },
+    PublicAccessBlockConfiguration: {
+      BlockPublicAcls: true,
+      BlockPublicPolicy: true,
+      IgnorePublicAcls: true,
+      RestrictPublicBuckets: true,
+    },
   });
   t.resourceCountIs('AWS::CloudFront::OriginAccessControl', 1);
   t.hasResourceProperties('AWS::CloudFront::Distribution', {
     DistributionConfig: Match.objectLike({
-      PriceClass: 'PriceClass_100', DefaultRootObject: 'index.html',
+      PriceClass: 'PriceClass_100',
+      DefaultRootObject: 'index.html',
       DefaultCacheBehavior: Match.objectLike({ ViewerProtocolPolicy: 'redirect-to-https' }),
       CacheBehaviors: [Match.objectLike({ PathPattern: '/api/*', ViewerProtocolPolicy: 'https-only' })],
     }),
@@ -79,18 +95,31 @@ test('Log retention is capped (no unbounded CloudWatch cost)', () => {
 test('Budget exists only when email is provided', () => {
   assert.equal(Object.keys(mk().findResources('AWS::Budgets::Budget')).length, 0);
   const t = mk('me@example.com');
-  t.hasResourceProperties('AWS::Budgets::Budget', Match.objectLike({ Budget: Match.objectLike({ BudgetLimit: { Amount: 5, Unit: 'USD' } }) }));
+  t.hasResourceProperties(
+    'AWS::Budgets::Budget',
+    Match.objectLike({ Budget: Match.objectLike({ BudgetLimit: { Amount: 5, Unit: 'USD' } }) }),
+  );
 });
 
 test('Cost guard: no NAT, VPC, WAF, Route53, Secrets Manager, KMS keys, API GW', () => {
   const s = JSON.stringify(mk().toJSON());
-  for (const bad of ['AWS::EC2::NatGateway', 'AWS::EC2::VPC', 'AWS::WAFv2', 'AWS::Route53', 'AWS::SecretsManager', 'AWS::KMS::Key', 'AWS::ElasticLoadBalancingV2', 'AWS::RDS'])
+  for (const bad of [
+    'AWS::EC2::NatGateway',
+    'AWS::EC2::VPC',
+    'AWS::WAFv2',
+    'AWS::Route53',
+    'AWS::SecretsManager',
+    'AWS::KMS::Key',
+    'AWS::ElasticLoadBalancingV2',
+    'AWS::RDS',
+  ])
     assert.ok(!s.includes(bad), bad);
 });
 
 test('Outputs present', () => {
   const t = mk();
-  t.hasOutput('SiteUrl', {}); t.hasOutput('TableName', {});
+  t.hasOutput('SiteUrl', {});
+  t.hasOutput('TableName', {});
 });
 
 test('zone-idx GSI: zk/ls keys, INCLUDE projection (not ALL), exactly one GSI', () => {
@@ -100,7 +129,10 @@ test('zone-idx GSI: zk/ls keys, INCLUDE projection (not ALL), exactly one GSI', 
   assert.equal(gsis.length, 1);
   const g = gsis[0];
   assert.equal(g.IndexName, 'zone-idx');
-  assert.deepEqual(g.KeySchema, [{ AttributeName: 'zk', KeyType: 'HASH' }, { AttributeName: 'ls', KeyType: 'RANGE' }]);
+  assert.deepEqual(g.KeySchema, [
+    { AttributeName: 'zk', KeyType: 'HASH' },
+    { AttributeName: 'ls', KeyType: 'RANGE' },
+  ]);
   assert.equal(g.Projection.ProjectionType, 'INCLUDE');
   assert.ok(g.Projection.NonKeyAttributes.includes('lastSeen') && g.Projection.NonKeyAttributes.includes('x'));
   const defs = tbl.Properties.AttributeDefinitions;

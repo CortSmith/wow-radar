@@ -1,6 +1,0 @@
-
-radar-cloud LOCAL  http://127.0.0.1:8787   (simulated latency 30ms)
-  active API key : dev-key-0001   (inactive test key: dev-inactive-key)
-  demo seed      : {"received":48,"changed":50}
-  simulator      : moves 8 random demo players every 5s (like a live session uploading)
-  demo account   : demo / demo-password-1   key dev-key-0001
