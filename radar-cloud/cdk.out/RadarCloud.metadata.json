@@ -1,0 +1,397 @@
+{
+  "/RadarCloud": [
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node, ts-node..."
+      ]
+    },
+    {
+      "type": "aws:cdk:templateFile",
+      "data": "RadarCloud.template.json"
+    }
+  ],
+  "/RadarCloud/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
+    {
+      "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+      "data": true
+    }
+  ],
+  "/RadarCloud/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C512MiB": [
+    {
+      "type": "aws:cdk:is-custom-resource-handler-singleton",
+      "data": true
+    },
+    {
+      "type": "aws:cdk:is-custom-resource-handler-runtime-family",
+      "data": 2
+    }
+  ],
+  "/RadarCloud/SiteUrl": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SiteUrl"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:95:5)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/TableName": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "TableName"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:96:5)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/BootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "BootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/RadarCloud/CheckBootstrapVersion": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CheckBootstrapVersion"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/RadarCloud/Table/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "TableCD117FA1"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Table2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:19:19)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/ApiLogs/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ApiLogs3D05D88B"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new LogGroup2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:42:17)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/Api/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ApiF70053CD"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Function2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:34:16)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/Api/invoke-function-url": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "Apiinvokefunctionurl01061C10"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.addFunctionUrl in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:45:20)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/Api/invoke-function": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ApiinvokefunctionF0B78F9A"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.addFunctionUrl in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:45:20)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/Site/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SiteE53D7754"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Bucket2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:47:20)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    },
+    {
+      "type": "aws:cdk:analytics:mixin",
+      "data": {
+        "mixin": "aws-cdk-lib.aws_s3.mixins.BucketAutoDeleteObjects"
+      }
+    }
+  ],
+  "/RadarCloud/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/RadarCloud/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/RadarCloud/Cdn/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "Cdn9963B1AD"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Distribution2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:54:18)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C512MiB/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C512MiB6723FB92"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new BucketDeployment2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:76:5)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)"
+      ]
+    }
+  ],
+  "/RadarCloud/CDKMetadata/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CDKMetadata"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib, node internals...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/RadarCloud/Api/ServiceRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ApiServiceRole1BD550DA"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Function2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:34:16)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/Api/FunctionUrl/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ApiFunctionUrl46E4ABDE"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...PropertyInjectable.addFunctionUrl in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:45:20)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/Site/Policy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SitePolicyC4000D7D"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Bucket2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:47:20)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals..."
+      ]
+    },
+    {
+      "type": "aws:cdk:analytics:mixin",
+      "data": {
+        "mixin": "aws-cdk-lib.aws_s3.mixins.BucketPolicyStatements"
+      }
+    }
+  ],
+  "/RadarCloud/Site/AutoDeleteObjectsCustomResource/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "SiteAutoDeleteObjectsCustomResourceBFAA9B42"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/RadarCloud/Deploy/AwsCliLayer/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DeployAwsCliLayer8445CB38"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new BucketDeployment2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:76:5)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/Deploy/CustomResource-512MiB/Default": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "DeployCustomResource512MiBF57F6BEB"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new BucketDeployment2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:76:5)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals, ts-node..."
+      ]
+    }
+  ],
+  "/RadarCloud/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C512MiB/ServiceRole/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C512MiBServiceRoleBA21DBC1"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/RadarCloud/Api/ServiceRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "ApiServiceRoleDefaultPolicyB24862FE"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ],
+  "/RadarCloud/Cdn/Origin1/S3OriginAccessControl/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CdnOrigin1S3OriginAccessControl6AC0AEFC"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...new Distribution2 in aws-cdk-lib...",
+        "new RadarStack (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\lib\\radar-stack.ts:54:18)",
+        "<anonymous> (C:\\Users\\corts\\Desktop\\NearbyTracker\\radar-cloud\\bin\\app.ts:4:1)",
+        "...node internals..."
+      ]
+    }
+  ],
+  "/RadarCloud/Custom::CDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C512MiB/ServiceRole/DefaultPolicy/Resource": [
+    {
+      "type": "aws:cdk:logicalId",
+      "data": "CustomCDKBucketDeployment8693BB64968944B69AAFB0CC9EB8756C512MiBServiceRoleDefaultPolicy96C3E726"
+    },
+    {
+      "type": "aws:cdk:creationStack",
+      "data": [
+        "...aws-cdk-lib...",
+        "(no user code in 10 frames, use --stack-trace-limit to capture more)"
+      ]
+    }
+  ]
+}

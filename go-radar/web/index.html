@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nearby Radar</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <div class="title"><span class="dot" id="conn" title="connection"></span><strong>Nearby Radar</strong>
+    <span id="zone" class="muted">-</span></div>
+  <div class="controls">
+    <div id="rulesetBox" class="seg" role="group" aria-label="Server rule-set" title="Server rule-set. Each rule-set has its own history, tracks and bounty ledger. Auto follows the realm type of your character.">
+      <button id="rs-auto" type="button">Auto</button><button id="rs-normal" type="button">Normal</button><button id="rs-pvp" type="button">PvP</button><button id="rs-rp" type="button">RP</button><button id="rs-rppvp" type="button">RP-PvP</button>
+    </div>
+    <div id="mapbox" class="combo" title="Switch the viewed map. Type to narrow the list; Esc closes.">
+      <input id="mapq" type="text" role="combobox" aria-label="Map" aria-expanded="false" aria-controls="maplist" aria-autocomplete="list" aria-haspopup="listbox" autocomplete="off" spellcheck="false" maxlength="60" placeholder="Map name...">
+      <ul id="maplist" role="listbox" aria-label="Maps" hidden></ul>
+    </div>
+    <label title="Radar range in yards">Range <input id="range" type="range" min="40" max="3000" value="300"><span id="rangeVal">300</span>y</label>
+    <label><input id="follow" type="checkbox" checked> Follow me</label>
+    <label><input id="stale" type="checkbox" checked> Stale</label>
+    <label title="Show friendly players (blue: your own faction)"><input id="showBlue" type="checkbox" checked> <span class="sw" style="background:#3b82f6"></span>Blue</label>
+    <label title="Show hostile/neutral players (red: the opposing faction)"><input id="showRed" type="checkbox" checked> <span class="sw" style="background:#ef4444"></span>Red</label>
+    <label><input id="bg" type="checkbox" checked> Map</label>
+    <label title="Fixed map frame: top-left is 0,0 and bottom-right is 100,100. Shift+arrows nudge the map, Shift +/- scale it, Shift+0 resets (per map)."><input id="fit" type="checkbox" checked> Fixed map</label>
+    <label title="Show the stored per-target history panel (key: H)"><input id="showHistory" type="checkbox"> History</label>
+  </div>
+</header>
+<main>
+  <section id="radarWrap"><canvas id="radar"></canvas><div id="tip" hidden></div><div id="empty" class="muted">Waiting for combat log events...</div></section>
+  <aside id="side">
+    <div id="search">
+      <div class="qrow"><input id="q" type="text" placeholder="Search player history (name)..." autocomplete="off" spellcheck="false" maxlength="100"><button id="qclear" type="button" title="Clear search and track (Esc)" hidden>x</button></div>
+      <ul id="results" hidden></ul>
+      <div id="trackInfo" class="muted" hidden></div>
+    </div>
+    <details id="bounty" open>
+      <summary><strong>Bounty</strong> <span id="bountyRs" class="rsTag" title="Each server rule-set has its own bounty ledger"></span> <span id="bountyCount" class="muted"></span></summary>
+      <div class="brow"><button id="bAnalyze" type="button" title="Scan the old combat logs in the logs folder for friendly player deaths and credit the hostile players involved">Analyze logs</button><span id="bStatus" class="muted"></span></div>
+      <div class="bnote muted">Safe to re-run: every death is counted only once.</div>
+      <ol id="bountyList"></ol>
+    </details>
+    <div id="summary" class="muted"></div>
+    <ul id="list"></ul>
+  </aside>
+</main>
+<section id="history" hidden>
+  <div class="hhead"><strong>History (stored, hidden by default)</strong><span class="muted" id="hcount"></span></div>
+  <div class="hscroll"><table id="htable"><thead><tr>
+    <th>Name</th><th>Avg dmg/hit</th><th>Avg dmg/event</th><th>Avg HP</th><th>Max HP</th><th>Samples</th><th>Last seen</th><th>Zone</th>
+  </tr></thead><tbody></tbody></table></div>
+</section>
+<footer class="muted" id="foot"></footer>
+<script src="/app.js"></script>
+</body>
+</html>

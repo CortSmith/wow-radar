@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nearby Radar</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="title"><span class="dot" id="conn" title="connection"></span><strong>Nearby Radar</strong>
+    <span id="zone" class="muted">-</span></div>
+  <div class="controls">
+    <div id="mapbox" class="combo" title="Switch the viewed map. Type to narrow the list; Esc closes.">
+      <input id="mapq" type="text" role="combobox" aria-label="Map" aria-expanded="false" aria-controls="maplist" aria-autocomplete="list" aria-haspopup="listbox" autocomplete="off" spellcheck="false" maxlength="60" placeholder="Map name...">
+      <ul id="maplist" role="listbox" aria-label="Maps" hidden></ul>
+    </div>
+    <label title="Show players last seen long before the newest sighting (more than 24h older), in grey"><input id="stale" type="checkbox" checked> Stale</label>
+    <label title="Show friendly players (blue: your own faction)"><input id="showBlue" type="checkbox" checked> <span class="sw" style="background:#3b82f6"></span>Blue</label>
+    <label title="Show hostile/neutral players (red: the opposing faction)"><input id="showRed" type="checkbox" checked> <span class="sw" style="background:#ef4444"></span>Red</label>
+    <label><input id="bg" type="checkbox" checked> Map</label>
+    <label title="Show the stored player table (key: H)"><input id="showHistory" type="checkbox"> History</label>
+    <span id="user" class="muted"></span><button id="logout" type="button" class="hbtn">Log out</button>
+  </div>
+</header>
+<main>
+  <aside id="ads" aria-label="Advertisements"></aside>
+  <section id="radarWrap"><canvas id="radar"></canvas><div id="tip" hidden></div><div id="empty" class="muted">No players yet. Upload a combat log...</div></section>
+  <aside id="side">
+    <div id="search">
+      <div class="qrow"><input id="q" type="text" placeholder="Search player history (name)..." autocomplete="off" spellcheck="false" maxlength="100"><button id="qclear" type="button" title="Clear search (Esc)" hidden>x</button></div>
+      <ul id="results" hidden></ul>
+      <div id="trackInfo" class="muted" hidden></div>
+    </div>
+    <details id="upload" open>
+      <summary><strong>Upload log</strong></summary>
+      <div id="drop">Drop WoWCombatLog*.txt here or <button id="pick" type="button">Choose files</button></div>
+      <input id="file" type="file" accept=".txt,text/plain" multiple hidden>
+      <div id="bar" hidden><div id="barFill"></div></div>
+      <div id="upStatus" class="muted"></div>
+      <div class="bnote muted">Parsed in your browser; only player summaries are sent. Safe to re-upload.</div>
+    </details>
+    <div id="summary" class="muted"></div>
+    <ul id="list"></ul>
+  </aside>
+</main>
+<section id="history" hidden>
+  <div class="hhead"><strong>History (stored, hidden by default)</strong><span class="muted" id="hcount"></span></div>
+  <div class="hscroll"><table id="htable"><thead><tr>
+    <th>Name</th><th>Level</th><th>Reaction</th><th>Max HP</th><th>Last seen</th><th>Zone</th>
+  </tr></thead><tbody></tbody></table></div>
+</section>
+<footer class="muted" id="foot"></footer>
+<div id="auth" hidden>
+  <form id="authForm" autocomplete="on">
+    <strong id="authTitle">Log in</strong>
+    <input id="authUser" type="text" placeholder="Username" autocomplete="username" required maxlength="40">
+    <input id="authPass" type="password" placeholder="Password" autocomplete="current-password" required>
+    <input id="authKey" type="password" placeholder="API key" autocomplete="off" required>
+    <div id="authErr"></div>
+    <button type="submit" id="authGo">Log in</button>
+    <button type="button" id="authToggle">Create account</button>
+  </form>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,536 @@
+{
+ "zones": {
+  "dunmorogh": {
+   "name": "Dun Morogh",
+   "file": "DunMorogh.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "alteracmountains": {
+   "name": "Alterac Mountains",
+   "file": "Alterac.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "arathihighlands": {
+   "name": "Arathi Highlands",
+   "file": "Arathi.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "badlands": {
+   "name": "Badlands",
+   "file": "Badlands.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "blastedlands": {
+   "name": "Blasted Lands",
+   "file": "BlastedLands.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "burningsteppes": {
+   "name": "Burning Steppes",
+   "file": "BurningSteppes.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "deadwindpass": {
+   "name": "Deadwind Pass",
+   "file": "DeadwindPass.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "duskwood": {
+   "name": "Duskwood",
+   "file": "Duskwood.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "easternplaguelands": {
+   "name": "Eastern Plaguelands",
+   "file": "EasternPlaguelands.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "elwynnforest": {
+   "name": "Elwynn Forest",
+   "file": "Elwynn.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "hillsbradfoothills": {
+   "name": "Hillsbrad Foothills",
+   "file": "Hilsbrad.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "thehinterlands": {
+   "name": "The Hinterlands",
+   "file": "Hinterlands.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "lochmodan": {
+   "name": "Loch Modan",
+   "file": "LochModan.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "redridgemountains": {
+   "name": "Redridge Mountains",
+   "file": "Redridge.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "searinggorge": {
+   "name": "Searing Gorge",
+   "file": "SearingGorge.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "silverpineforest": {
+   "name": "Silverpine Forest",
+   "file": "Silverpine.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "stranglethornvale": {
+   "name": "Stranglethorn Vale",
+   "file": "StranglethornVale.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "swampofsorrows": {
+   "name": "Swamp of Sorrows",
+   "file": "SwampOfSorrows.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "tirisfalglades": {
+   "name": "Tirisfal Glades",
+   "file": "Tirisfal.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "westernplaguelands": {
+   "name": "Western Plaguelands",
+   "file": "WesternPlaguelands.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "westfall": {
+   "name": "Westfall",
+   "file": "Westfall.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "wetlands": {
+   "name": "Wetlands",
+   "file": "Wetlands.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "ghostlands": {
+   "name": "Ghostlands",
+   "file": "Ghostlands.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "eversongwoods": {
+   "name": "Eversong Woods",
+   "file": "EversongWoods.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "isleofqueldanas": {
+   "name": "Isle of Quel'Danas",
+   "file": "Sunwell.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "ashenvale": {
+   "name": "Ashenvale",
+   "file": "Ashenvale.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "azshara": {
+   "name": "Azshara",
+   "file": "Aszhara.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "darkshore": {
+   "name": "Darkshore",
+   "file": "Darkshore.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "desolace": {
+   "name": "Desolace",
+   "file": "Desolace.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "durotar": {
+   "name": "Durotar",
+   "file": "Durotar.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "dustwallowmarsh": {
+   "name": "Dustwallow Marsh",
+   "file": "Dustwallow.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "felwood": {
+   "name": "Felwood",
+   "file": "Felwood.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "feralas": {
+   "name": "Feralas",
+   "file": "Feralas.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "moonglade": {
+   "name": "Moonglade",
+   "file": "Moonglade.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "mulgore": {
+   "name": "Mulgore",
+   "file": "Mulgore.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "silithus": {
+   "name": "Silithus",
+   "file": "Silithus.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "stonetalonmountains": {
+   "name": "Stonetalon Mountains",
+   "file": "StonetalonMountains.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "tanaris": {
+   "name": "Tanaris",
+   "file": "Tanaris.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "teldrassil": {
+   "name": "Teldrassil",
+   "file": "Teldrassil.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "thebarrens": {
+   "name": "The Barrens",
+   "file": "Barrens.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "thousandneedles": {
+   "name": "Thousand Needles",
+   "file": "ThousandNeedles.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "ungorocrater": {
+   "name": "Un'Goro Crater",
+   "file": "UngoroCrater.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "winterspring": {
+   "name": "Winterspring",
+   "file": "Winterspring.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": true
+  },
+  "azuremystisle": {
+   "name": "Azuremyst Isle",
+   "file": "AzuremystIsle.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "bloodmystisle": {
+   "name": "Bloodmyst Isle",
+   "file": "BloodmystIsle.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "stormwindcity": {
+   "name": "Stormwind City",
+   "file": "Stormwind.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "ironforge": {
+   "name": "Ironforge",
+   "file": "Ironforge.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "darnassus": {
+   "name": "Darnassus",
+   "file": "Darnassis.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "orgrimmar": {
+   "name": "Orgrimmar",
+   "file": "Orgrimmar.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "thunderbluff": {
+   "name": "Thunder Bluff",
+   "file": "ThunderBluff.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "undercity": {
+   "name": "Undercity",
+   "file": "Undercity.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "silvermooncity": {
+   "name": "Silvermoon City",
+   "file": "SilvermoonCity.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "theexodar": {
+   "name": "The Exodar",
+   "file": "TheExodar.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "shattrathcity": {
+   "name": "Shattrath City",
+   "file": "ShattrathCity.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "hellfirepeninsula": {
+   "name": "Hellfire Peninsula",
+   "file": "Hellfire.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "zangarmarsh": {
+   "name": "Zangarmarsh",
+   "file": "Zangarmarsh.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "terokkarforest": {
+   "name": "Terokkar Forest",
+   "file": "TerokkarForest.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "nagrand": {
+   "name": "Nagrand",
+   "file": "Nagrand.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "bladesedgemountains": {
+   "name": "Blade's Edge Mountains",
+   "file": "BladesEdgeMountains.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "netherstorm": {
+   "name": "Netherstorm",
+   "file": "Netherstorm.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "shadowmoonvalley": {
+   "name": "Shadowmoon Valley",
+   "file": "ShadowmoonValley.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "boreantundra": {
+   "name": "Borean Tundra",
+   "file": "BoreanTundra.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "dragonblight": {
+   "name": "Dragonblight",
+   "file": "Dragonblight.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "grizzlyhills": {
+   "name": "Grizzly Hills",
+   "file": "GrizzlyHills.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "howlingfjord": {
+   "name": "Howling Fjord",
+   "file": "HowlingFjord.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "icecrown": {
+   "name": "Icecrown",
+   "file": "IcecrownGlacier.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "sholazarbasin": {
+   "name": "Sholazar Basin",
+   "file": "SholazarBasin.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "thestormpeaks": {
+   "name": "The Storm Peaks",
+   "file": "TheStormPeaks.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "zuldrak": {
+   "name": "Zul'Drak",
+   "file": "ZulDrak.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "crystalsongforest": {
+   "name": "Crystalsong Forest",
+   "file": "CrystalsongForest.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "wintergrasp": {
+   "name": "Wintergrasp",
+   "file": "LakeWintergrasp.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "azeroth": {
+   "name": "Azeroth",
+   "file": "Azeroth.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "kalimdor": {
+   "name": "Kalimdor",
+   "file": "Kalimdor.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "easternkingdoms": {
+   "name": "Eastern Kingdoms",
+   "file": "EasternKingdoms.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "outland": {
+   "name": "Outland",
+   "file": "Expansion01.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  },
+  "northrend": {
+   "name": "Northrend",
+   "file": "Northrend.webp",
+   "w": 1002,
+   "h": 668,
+   "revealed": false
+  }
+ }
+}
