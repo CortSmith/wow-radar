@@ -71,19 +71,21 @@ type rateSample struct {
 type progress struct {
 	now func() time.Time
 
-	mu        sync.Mutex
-	running   bool
-	conn      connState
-	lastError string
-	warning   string
-	lastReply string
-	lines     int64
-	bytes     int64
-	lastSent  time.Time
-	retryAt   time.Time
-	startedAt time.Time
-	samples   []rateSample
-	events    []LogEvent
+	mu         sync.Mutex
+	running    bool
+	conn       connState
+	lastError  string
+	lastStatus int  // HTTP status of the last failed connection (0 = none arrived)
+	fatal      bool // the upload stopped for good (the key was refused); lastError says why
+	warning    string
+	lastReply  string
+	lines      int64
+	bytes      int64
+	lastSent   time.Time
+	retryAt    time.Time
+	startedAt  time.Time
+	samples    []rateSample
+	events     []LogEvent
 }
 
 func newProgress(now func() time.Time) *progress { return &progress{now: now} }
@@ -93,6 +95,7 @@ func (p *progress) begin() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.running, p.conn, p.lastError, p.warning, p.lastReply = true, connNone, "", "", ""
+	p.lastStatus, p.fatal = 0, false
 	p.lines, p.bytes = 0, 0
 	p.lastSent, p.retryAt, p.startedAt = time.Time{}, time.Time{}, p.now()
 	p.samples, p.events = nil, nil
@@ -152,7 +155,9 @@ func (p *progress) handle(e feed.Event) {
 	case feed.EventEnded:
 		p.onEnded(e)
 	case feed.EventBackoff:
-		p.retryAt = p.now().Add(e.Wait)
+		p.onBackoff(e)
+	case feed.EventAuthRejected:
+		p.onAuthRejected(e)
 	}
 }
 
@@ -170,13 +175,34 @@ func (p *progress) onSent(e feed.Event) {
 
 func (p *progress) onEnded(e feed.Event) {
 	if e.Err != nil {
-		p.conn, p.lastError = connFailed, describeFailure(e)
+		p.conn, p.lastStatus = connFailed, e.Status
+		if waitsBeforeRetry(e.Status) {
+			return // onBackoff explains it once the wait is known
+		}
+		p.lastError = describeFailure(e)
 		p.noteLocked("%s", p.lastError)
 		return
 	}
 	p.conn = connNone
 	p.lastReply = describeReply(e.Body)
 	p.noteLocked("Server summary: %s", p.lastReply)
+}
+
+// onBackoff records when the next attempt happens and, for a 429 or 409, says why it waits.
+func (p *progress) onBackoff(e feed.Event) {
+	p.retryAt = p.now().Add(e.Wait)
+	if !waitsBeforeRetry(p.lastStatus) {
+		return
+	}
+	p.lastError = describeWait(p.lastStatus, e.Wait)
+	p.noteLocked("%s", p.lastError)
+}
+
+// onAuthRejected ends the run: the server refused the key, so the streamer will not retry.
+func (p *progress) onAuthRejected(e feed.Event) {
+	p.running, p.fatal, p.conn, p.retryAt = false, true, connFailed, time.Time{}
+	p.lastStatus, p.lastError = e.Status, feed.AuthRejectedMessage(e.Status)
+	p.noteLocked("%s", p.lastError)
 }
 
 // snapshot builds the Status; file, queued and dropped come from the Session.
@@ -200,6 +226,8 @@ func (p *progress) snapshot(file string, queued int, dropped int64) Status {
 
 func (p *progress) state(now time.Time) string {
 	switch {
+	case p.fatal:
+		return StateError
 	case !p.running:
 		return StateIdle
 	case p.conn == connFailed:
@@ -237,18 +265,36 @@ func describeFailure(e feed.Event) string {
 	switch e.Status {
 	case 0:
 		return "Cannot reach the server: " + rootCause(e.Err)
-	case http.StatusUnauthorized:
-		return "The server rejected the ingest key (401). Check the key and try again."
-	case http.StatusForbidden:
-		return "The server refused this key for uploading (403)."
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return feed.AuthRejectedMessage(e.Status)
 	case http.StatusNotFound:
 		return "The server answered 404. Is the address the ingest server, not the web page?"
-	case http.StatusConflict:
-		return "The server is already receiving an upload from this computer (409). Close the other client or radar-feed."
-	case http.StatusTooManyRequests:
-		return "The server is busy (429); trying again shortly."
+	case http.StatusConflict, http.StatusTooManyRequests:
+		return describeWait(e.Status, 0)
 	}
 	return fmt.Sprintf("The server answered HTTP %d.", e.Status)
+}
+
+// waitsBeforeRetry reports the statuses whose message names the wait (see describeWait).
+func waitsBeforeRetry(status int) bool {
+	return status == http.StatusConflict || status == http.StatusTooManyRequests
+}
+
+// describeWait explains a 409 or 429 and, when wait is positive, how long the client pauses.
+func describeWait(status int, wait time.Duration) string {
+	secs := int(math.Ceil(wait.Seconds()))
+	if status == http.StatusConflict {
+		msg := "Another uploader is already sending with the same source name (409)"
+		if secs > 0 {
+			msg += fmt.Sprintf("; waiting %d s before trying again", secs)
+		}
+		return msg + ". Close the other client or radar-feed, or use a different source name."
+	}
+	msg := "The server is limiting this address (429)"
+	if secs > 0 {
+		return msg + fmt.Sprintf("; waiting %d s before trying again.", secs)
+	}
+	return msg + "; it will be tried again later."
 }
 
 // rootCause drops the request URL that net/http puts in its errors.

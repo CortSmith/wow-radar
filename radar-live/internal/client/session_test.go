@@ -365,6 +365,64 @@ func TestSessionWithRealStreamerExplainsARejectedKey(t *testing.T) {
 	}
 }
 
+const authMessage = "The server rejected the ingest key (401). The upload stopped; fix the key and click Start again."
+
+// A 401 stops the upload for good (one request, no retry loop), shows the error state, and
+// Start works again without restarting the app.
+func TestSessionStopsOnA401AndCanBeStartedAgain(t *testing.T) {
+	var mu sync.Mutex
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		mu.Unlock()
+		http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	count := func() int { mu.Lock(); defer mu.Unlock(); return hits }
+	session := NewSession(SessionOptions{Poll: testPoll})
+	defer session.Stop()
+	path := filepath.Join(t.TempDir(), "log.txt")
+	writeLog(t, path, "")
+	cfg := StartConfig{Settings: Settings{Server: srv.URL, LogPath: path}, Key: " " + fakeKey + "\n", Source: "pc"}
+	if err := session.Start(cfg); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "log opened", func() bool { return session.Status().File != "" })
+	appendLog(t, path, "line\n")
+	eventually(t, "auth error", func() bool { return session.Status().Error == authMessage })
+	st := session.Status()
+	if st.State != StateError || st.Running || st.RetryInSec != 0 {
+		t.Fatalf("status = %+v", st)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if count() != 1 {
+		t.Fatalf("server was contacted %d times, want 1", count())
+	}
+	if err := session.Start(cfg); err != nil {
+		t.Fatalf("Start after a 401: %v", err)
+	}
+	eventually(t, "log reopened", func() bool { return session.Status().File != "" })
+	appendLog(t, path, "line two\n")
+	eventually(t, "second attempt", func() bool { return count() == 2 && session.Status().Error == authMessage })
+	if st := session.Status(); st.State != StateError || st.Running {
+		t.Fatalf("after the second 401: %+v", st)
+	}
+}
+
+func TestSessionTrimsTheKeyItIsGiven(t *testing.T) {
+	rig := newRig(t, nil)
+	path := filepath.Join(t.TempDir(), "WoWCombatLog.txt")
+	writeLog(t, path, "")
+	s := Settings{LogPath: path, Server: "http://127.0.0.1:1"}
+	if err := rig.session.Start(StartConfig{Settings: s, Key: "\t" + fakeKey + " \r\n", Source: "pc"}); err != nil {
+		t.Fatal(err)
+	}
+	if rig.uploader.cfg.Key != fakeKey {
+		t.Fatalf("uploader got key %q", rig.uploader.cfg.Key)
+	}
+}
+
 func TestEscapeGlob(t *testing.T) {
 	tests := map[string]string{"plain.txt": "plain.txt", "a[1].txt": "a[[]1].txt", "a*b?": "a[*]b[?]"}
 	for in, want := range tests {

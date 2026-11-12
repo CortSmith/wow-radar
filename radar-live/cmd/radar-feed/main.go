@@ -15,7 +15,6 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -72,7 +71,7 @@ func parseConfig(args []string, lookup func(string) (string, bool)) (config, err
 		}
 		return fallback
 	}
-	c.key = fromEnv("KEY", "")
+	c.key = feed.CleanKey(fromEnv("KEY", ""))
 	host, _ := os.Hostname()
 	fs := flag.NewFlagSet("radar-feed", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -108,7 +107,7 @@ func (c *config) finish(keyFile string) error {
 		if err != nil {
 			return fmt.Errorf("key file: %w", err)
 		}
-		c.key = strings.TrimSpace(string(data))
+		c.key = feed.CleanKey(string(data))
 	}
 	c.source = feed.SanitizeSource(c.source)
 	if u, err := url.Parse(c.ingestURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
@@ -153,6 +152,9 @@ func run(ctx context.Context, args []string, lookup func(string) (string, bool),
 	})
 	log.Info("radar-feed started", "version", version, "ingest", cfg.ingestURL, "source", cfg.source, "logs", cfg.logs)
 
+	// The follower must stop when the streamer gives up (a refused key), not only on Ctrl+C.
+	ctx, stopAll := context.WithCancel(ctx)
+	defer stopAll()
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -160,6 +162,7 @@ func run(ctx context.Context, args []string, lookup func(string) (string, bool),
 		_ = follower.Run(ctx, queue.Push)
 	}()
 	err = streamer.Run(ctx, queue)
+	stopAll()
 	wg.Wait()
 	if dropped := queue.Dropped(); dropped > 0 {
 		log.Warn("lines dropped while ingest was unreachable", "lines", dropped)

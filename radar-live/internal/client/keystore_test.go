@@ -51,3 +51,18 @@ func TestKeyStoreNeverPrintsTheKey(t *testing.T) {
 		}
 	}
 }
+
+func TestKeyStoreTrimsWhitespaceAndNewlinesFromEveryKeySource(t *testing.T) {
+	ks := NewKeyStore(envWith("\r\n  " + fakeKey + " \n"))
+	if ks.Key() != fakeKey {
+		t.Fatalf("env key %q", ks.Key())
+	}
+	ks.Set("\ttyped-key-2222222222\r\n")
+	if ks.Key() != "typed-key-2222222222" {
+		t.Fatalf("typed key %q", ks.Key())
+	}
+	ks.Set(" \n ") // only whitespace counts as no key
+	if ks.Key() != fakeKey || ks.Source() != KeyFromEnv {
+		t.Fatalf("whitespace-only key: %q %q", ks.Key(), ks.Source())
+	}
+}

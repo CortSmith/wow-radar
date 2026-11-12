@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -47,10 +48,11 @@ type EventKind int
 
 // The kinds of Event a Streamer reports to StreamerConfig.Observe.
 const (
-	EventConnecting EventKind = iota // a connection to ingest is being opened
-	EventSent                        // Lines and Bytes were written to the open connection
-	EventEnded                       // the connection ended: Status and Body hold ingest's reply, Err the failure (if any)
-	EventBackoff                     // the streamer waits Wait before it connects again
+	EventConnecting   EventKind = iota // a connection to ingest is being opened
+	EventSent                          // Lines and Bytes were written to the open connection
+	EventEnded                         // the connection ended: Status and Body hold ingest's reply, Err the failure (if any)
+	EventBackoff                       // the streamer waits Wait before it connects again
+	EventAuthRejected                  // ingest answered 401/403 (Status): the streamer stops and Run returns ErrAuthRejected
 )
 
 // Event is one progress report. Observe is called from the streamer's goroutines and must not block.
@@ -72,6 +74,7 @@ type StreamerConfig struct {
 	MaxBytesPerSec int    // <= 0 means unlimited
 	BackoffMin     time.Duration
 	BackoffMax     time.Duration
+	Rand           func() float64 // jitter source returning [0, 1); test hook, default math/rand
 	Client         *http.Client
 	Logf           func(format string, args ...any)
 	Observe        func(Event)                                // optional progress callback (see Event)
@@ -80,13 +83,15 @@ type StreamerConfig struct {
 }
 
 // Streamer posts queued lines to radar-ingest's /v1/stream as one long chunked request and
-// reconnects with exponential backoff. Delivery is at most once: lines that were already written
+// reconnects with a backoff that depends on the failure (see backoff). It stops for good when the key is refused. Delivery is at most once: lines that were already written
 // to a connection that then broke are not resent, because ingest adds counters and a replay would
 // count twice. Lines that were never written are kept and retried.
 type Streamer struct {
 	cfg     StreamerConfig
 	limiter *Limiter
 	sleep   func(context.Context, time.Duration) error
+	now     func() time.Time
+	rand    func() float64
 }
 
 // NewStreamer applies defaults to cfg.
@@ -104,6 +109,7 @@ func NewStreamer(cfg StreamerConfig) *Streamer {
 			MaxIdleConns: 1, IdleConnTimeout: 30 * time.Second,
 		}}
 	}
+	cfg.Key = CleanKey(cfg.Key)
 	if cfg.Logf == nil {
 		cfg.Logf = func(string, ...any) {}
 	}
@@ -111,7 +117,14 @@ func NewStreamer(cfg StreamerConfig) *Streamer {
 	if sleep == nil {
 		sleep = SleepContext
 	}
-	return &Streamer{cfg: cfg, sleep: sleep, limiter: NewLimiter(cfg.MaxBytesPerSec, cfg.Now, cfg.Sleep)}
+	now, random := cfg.Now, cfg.Rand
+	if now == nil {
+		now = time.Now
+	}
+	if random == nil {
+		random = rand.Float64
+	}
+	return &Streamer{cfg: cfg, sleep: sleep, now: now, rand: random, limiter: NewLimiter(cfg.MaxBytesPerSec, cfg.Now, cfg.Sleep)}
 }
 
 // streamURL builds the full /v1/stream URL from the ingest base URL.
@@ -138,14 +151,14 @@ func (s *Streamer) observe(e Event) {
 	}
 }
 
-// Run sends lines from q until ctx ends (it then returns ctx.Err()). It only fails up front,
-// when the configured URL is unusable.
+// Run sends lines from q until ctx ends (it then returns ctx.Err()). It fails up front when the
+// configured URL is unusable, and with ErrAuthRejected when ingest refuses the key (401/403).
 func (s *Streamer) Run(ctx context.Context, q *Queue) error {
 	target, err := streamURL(s.cfg.URL, s.cfg.Source, s.cfg.Ruleset)
 	if err != nil {
 		return err
 	}
-	backoff := s.cfg.BackoffMin
+	wait := newBackoff(s.cfg.BackoffMin, s.cfg.BackoffMax, s.rand)
 	for {
 		// A connection is opened only when there is something to send, so a quiet game does
 		// not make ingest's idle timer close and reopen the stream.
@@ -153,41 +166,51 @@ func (s *Streamer) Run(ctx context.Context, q *Queue) error {
 		if err != nil {
 			return err
 		}
-		sent, err := s.session(ctx, target, q, first)
+		sent, out := s.session(ctx, target, q, first)
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		if out.fatal() {
+			s.observe(Event{Kind: EventAuthRejected, Status: out.status})
+			return &AuthRejectedError{Status: out.status}
+		}
 		if sent > 0 {
-			backoff = s.cfg.BackoffMin
+			wait.reset()
 		}
-		if err != nil {
-			s.cfg.Logf("stream to ingest ended: %v (retrying in %s, %d lines queued)", err, backoff, q.Len())
+		d := wait.next(out.status, out.retryAfter, s.now())
+		if err := out.failure(); err != nil {
+			s.cfg.Logf("stream to ingest ended: %v (retrying in %s, %d lines queued)", err, d.Round(time.Millisecond), q.Len())
 		}
-		s.observe(Event{Kind: EventBackoff, Wait: backoff})
-		if serr := s.sleep(ctx, backoff); serr != nil {
+		s.observe(Event{Kind: EventBackoff, Wait: d})
+		if serr := s.sleep(ctx, d); serr != nil {
 			return serr
 		}
-		backoff = min(backoff*2, s.cfg.BackoffMax)
 	}
 }
 
 // outcome is what the HTTP exchange of one session produced.
 type outcome struct {
-	status int
-	body   string
-	err    error
+	status     int
+	body       string
+	retryAfter string // the Retry-After header of the reply
+	err        error
+}
+
+// fatal reports a reply that retrying cannot fix: the key was refused.
+func (o outcome) fatal() bool {
+	return o.err == nil && (o.status == http.StatusUnauthorized || o.status == http.StatusForbidden)
 }
 
 // session holds one connection open, starting with the already popped line, and returns how many
-// lines it wrote.
-func (s *Streamer) session(ctx context.Context, target string, q *Queue, first string) (int, error) {
+// lines it wrote and what the exchange produced.
+func (s *Streamer) session(ctx context.Context, target string, q *Queue, first string) (int, outcome) {
 	s.observe(Event{Kind: EventConnecting})
 	pr, pw := io.Pipe()
 	reqCtx, cancelReq := context.WithCancel(context.Background())
 	defer cancelReq()
 	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, target, pr)
 	if err != nil {
-		return 0, err
+		return 0, outcome{err: err}
 	}
 	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
 	req.Header.Set("Expect", "100-continue") // a rejection (bad key, busy source) arrives before any line is sent
@@ -207,9 +230,8 @@ func (s *Streamer) session(ctx context.Context, target string, q *Queue, first s
 	sent := s.pump(ctx, popCtx, q, pw, first)
 	_ = pw.Close()
 	out := s.await(finished, cancelReq)
-	err = out.failure()
-	s.observe(Event{Kind: EventEnded, Status: out.status, Body: out.body, Err: err})
-	return sent, err
+	s.observe(Event{Kind: EventEnded, Status: out.status, Body: out.body, Err: out.failure()})
+	return sent, out
 }
 
 // failure turns a finished exchange into an error (nil for a 200 reply).
@@ -231,7 +253,7 @@ func (s *Streamer) exchange(req *http.Request) outcome {
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes))
-	return outcome{status: resp.StatusCode, body: string(body)}
+	return outcome{status: resp.StatusCode, body: string(body), retryAfter: resp.Header.Get("Retry-After")}
 }
 
 // await waits for the exchange to finish, cutting it off after the shutdown grace.

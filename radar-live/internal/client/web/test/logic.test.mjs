@@ -117,6 +117,16 @@ test('describeState shows the reason and the countdown for an error', () => {
   assert.doesNotMatch(describeState(status({ running: true, state: 'error', error: 'x', retryInSec: 0 })).hint, /retrying/i);
 });
 
+test('describeState shows a stopped upload that ended in an error (refused key)', () => {
+  const error = 'The server rejected the ingest key (401). The upload stopped; fix the key and click Start again.';
+  const d = describeState(status({ running: false, state: 'error', error }));
+  assert.deepEqual(d, { label: 'Error', tone: 'error', hint: error });
+});
+
+test('startPayload strips pasted spaces and line breaks around the key', () => {
+  assert.equal(startPayload({ ...good, key: '\r\n  key-123 \n' }).key, 'key-123');
+});
+
 test('describeState keeps a note visible', () => {
   assert.match(describeState(status({ running: true, state: 'waiting', note: 'Cannot read the log folder' })).hint, /Cannot read the log folder/);
 });

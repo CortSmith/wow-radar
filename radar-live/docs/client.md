@@ -49,7 +49,9 @@ Click **Start**. By default the client begins at the end of the file, so only wh
 The status panel shows the state (Stopped, Connecting, Uploading, Waiting for new data, Error with the reason), lines and
 bytes sent, lines per second, the time of the last upload, the server's last reply, a countdown to the next reconnect and a
 short scrolling event log. If the server is unreachable the client keeps reading the log (up to 200 000 lines, oldest dropped)
-and reconnects with a growing delay.
+and reconnects with a growing delay (0.5 s up to 30 s, with a little random jitter). The wait is longer when the server
+answers 429 (at least 30 s, up to 15 min, following its Retry-After header) or 409 (10 s up to 2 min). A refused key (401/403)
+stops the upload at once instead of retrying.
 
 Uploads are at most once: lines already written to a connection that then breaks are not sent again, because the server adds
 counters and a repeat would count twice.
@@ -58,10 +60,11 @@ counters and a repeat would count twice.
 
 | Symptom | Fix |
 |---|---|
-| "The server rejected the ingest key (401)" | the key is wrong or has a stray space; ask for it again, retype it, press Stop and Start |
+| "The server rejected the ingest key (401). The upload stopped..." | the upload stopped and does not retry. Check that the key has no stray spaces or line breaks (they are trimmed, but a wrong or truncated paste is not), type the right key and click Start again. No restart is needed |
+| "The server is limiting this address (429); waiting N s" | the server temporarily blocked this address, usually after repeated wrong keys. Wait; the client retries by itself (30 s or more). On the server run `radar-db guard list` to see the ban and `radar-db guard unban <ip>` to lift it |
 | "Cannot reach the server" | check the address and port, that the server is running, and the firewall of the server (port 8788) and of this PC |
 | "The server answered 404" | the address points to the web page (port 8787) instead of the ingest server (8788) |
-| "already receiving an upload from this computer (409)" | another radar-client or radar-feed with the same computer name is running |
+| "Another uploader is already sending with the same source name (409)" | another radar-client or radar-feed uses the same source name (computer name); close it or change the source. The client waits 10 s or more between attempts |
 | Status stays "Waiting for the log file" | the folder or file does not exist, or `/combatlog` is off so WoW has not created a log |
 | Uploading, but the page shows nothing | Advanced Combat Logging is off, or the rule-set differs from the one the page shows |
 | Path with spaces | fine; paste it as is. Quotes from Explorer's "Copy as path" are removed automatically |

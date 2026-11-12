@@ -124,6 +124,8 @@ export function baseName(path) {
 /** Label, colour tone and explanatory hint for the state badge. */
 export function describeState(status) {
   const hint = [status.error, retryText(status), status.note].filter(Boolean).join(' ');
+  // A refused key ends the run (running is false) but must stay visible as an error.
+  if (status.state === 'error' && !status.running) return { label: 'Error', tone: 'error', hint };
   if (!status.running) return { label: 'Stopped', tone: 'idle', hint };
   switch (status.state) {
     case 'connecting': return { label: 'Connecting...', tone: 'busy', hint };

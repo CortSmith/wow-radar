@@ -105,7 +105,7 @@ func (s *Session) launch(st Settings, cfg StartConfig) *activeRun {
 		OnError: func(err error) { s.progress.setWarning("Cannot read the log folder: " + err.Error()) },
 	})
 	uploader := s.opts.NewUploader(feed.StreamerConfig{
-		URL: st.Server, Key: cfg.Key, Source: sourceName(cfg.Source), Ruleset: st.Ruleset,
+		URL: st.Server, Key: feed.CleanKey(cfg.Key), Source: sourceName(cfg.Source), Ruleset: st.Ruleset,
 		MaxBytesPerSec: uploadBytesPerSec, Observe: s.progress.handle,
 	})
 	run.wg.Add(2)
@@ -115,12 +115,28 @@ func (s *Session) launch(st Settings, cfg StartConfig) *activeRun {
 	}()
 	go func() {
 		defer run.wg.Done()
-		if err := uploader.Run(ctx, run.queue); err != nil && ctx.Err() == nil {
+		err := uploader.Run(ctx, run.queue)
+		switch {
+		case errors.Is(err, feed.ErrAuthRejected):
+			s.finishFatal(run) // progress already shows why, from the streamer's event
+		case err != nil && ctx.Err() == nil:
 			s.progress.fail("The upload stopped: " + rootCause(err))
 		}
 	}()
 	s.progress.note("Started")
 	return run
+}
+
+// finishFatal releases a run whose uploader gave up (the key was refused): the follower is
+// stopped and the session becomes idle again, so Start works without restarting the app. The
+// error stays in the status until the next Start.
+func (s *Session) finishFatal(run *activeRun) {
+	s.mu.Lock()
+	if s.active == run {
+		s.active = nil
+	}
+	s.mu.Unlock()
+	run.cancel()
 }
 
 // Stop ends the upload, waits for the stream to close (so the server's summary is recorded) and

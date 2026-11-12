@@ -90,10 +90,10 @@ func TestProgressLinesPerSecondOverTheRateWindow(t *testing.T) {
 
 func TestProgressErrorKeepsReasonAndCountsDown(t *testing.T) {
 	p, clock := newTestProgress()
-	p.handle(feed.Event{Kind: feed.EventEnded, Status: http.StatusUnauthorized, Err: errors.New("ingest answered 401")})
+	p.handle(feed.Event{Kind: feed.EventEnded, Status: http.StatusServiceUnavailable, Err: errors.New("ingest answered 503")})
 	p.handle(feed.Event{Kind: feed.EventBackoff, Wait: 4 * time.Second})
 	st := p.snapshot("", 0, 0)
-	if st.State != StateError || !strings.Contains(st.Error, "rejected the ingest key") || st.RetryInSec != 4 {
+	if st.State != StateError || !strings.Contains(st.Error, "HTTP 503") || st.RetryInSec != 4 {
 		t.Fatalf("status = %+v", st)
 	}
 	clock.Advance(1500 * time.Millisecond)
@@ -171,10 +171,10 @@ func TestDescribeFailure(t *testing.T) {
 		ev   feed.Event
 		want string
 	}{
-		{"unauthorized", feed.Event{Status: 401}, "rejected the ingest key"},
+		{"unauthorized", feed.Event{Status: 401}, "The server rejected the ingest key (401)."},
 		{"forbidden", feed.Event{Status: 403}, "refused"},
-		{"busy source", feed.Event{Status: 409}, "already receiving"},
-		{"rate limited", feed.Event{Status: 429}, "busy"},
+		{"busy source", feed.Event{Status: 409}, "same source name"},
+		{"rate limited", feed.Event{Status: 429}, "limiting this address"},
 		{"not found", feed.Event{Status: 404}, "not the web page"},
 		{"server error", feed.Event{Status: 503}, "HTTP 503"},
 		{"network", feed.Event{Err: errors.New("dial tcp 10.0.0.1:1: refused")}, "Cannot reach the server"},
@@ -197,5 +197,52 @@ func TestProgressEventLogIsBounded(t *testing.T) {
 	events := p.snapshot("", 0, 0).Events
 	if len(events) != maxLogEvents || !strings.HasSuffix(events[len(events)-1].Text, "event 119") {
 		t.Fatalf("%d events, last %q", len(events), events[len(events)-1].Text)
+	}
+}
+
+const wantAuthMessage = "The server rejected the ingest key (401). The upload stopped; fix the key and click Start again."
+
+func TestProgressAuthRejectedIsATerminalError(t *testing.T) {
+	p, _ := newTestProgress()
+	p.handle(feed.Event{Kind: feed.EventConnecting})
+	p.handle(feed.Event{Kind: feed.EventEnded, Status: 401, Err: errors.New("ingest answered 401")})
+	p.handle(feed.Event{Kind: feed.EventAuthRejected, Status: 401})
+	st := p.snapshot("", 0, 0)
+	if st.State != StateError || st.Running || st.Error != wantAuthMessage || st.RetryInSec != 0 {
+		t.Fatalf("status = %+v", st)
+	}
+	if last := st.Events[len(st.Events)-1].Text; last != wantAuthMessage {
+		t.Fatalf("last event %q", last)
+	}
+	p.begin() // Start again
+	if st := p.snapshot("", 0, 0); st.State != StateWaiting || !st.Running || st.Error != "" {
+		t.Fatalf("after restart: %+v", st)
+	}
+}
+
+func TestProgressAuthRejectedForbiddenMessage(t *testing.T) {
+	p, _ := newTestProgress()
+	p.handle(feed.Event{Kind: feed.EventAuthRejected, Status: 403})
+	if got := p.snapshot("", 0, 0).Error; !strings.Contains(got, "(403)") || !strings.Contains(got, "click Start again") {
+		t.Fatalf("error = %q", got)
+	}
+}
+
+func TestProgressExplainsTheWaitAfterAThrottle(t *testing.T) {
+	tests := []struct {
+		status int
+		want   string
+	}{
+		{429, "The server is limiting this address (429); waiting 45 s before trying again."},
+		{409, "Another uploader is already sending with the same source name (409); waiting 45 s before trying again."},
+	}
+	for _, tc := range tests {
+		p, _ := newTestProgress()
+		p.handle(feed.Event{Kind: feed.EventEnded, Status: tc.status, Err: errors.New("x")})
+		p.handle(feed.Event{Kind: feed.EventBackoff, Wait: 45 * time.Second})
+		st := p.snapshot("", 0, 0)
+		if st.State != StateError || !strings.HasPrefix(st.Error, tc.want) || st.RetryInSec != 45 {
+			t.Errorf("%d: status = %+v", tc.status, st)
+		}
 	}
 }

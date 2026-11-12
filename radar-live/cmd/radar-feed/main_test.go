@@ -193,3 +193,59 @@ func TestRunNeverLogsTheKey(t *testing.T) {
 		t.Fatalf("log leaks the key: %s", out.String())
 	}
 }
+
+func TestRunExitsWithTheAuthMessageAndDoesNotLoop(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "WoWCombatLog-110526_200000.txt")
+	if err := os.WriteFile(logPath, []byte("old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	hits := 0
+	var gotKey string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		gotKey = r.Header.Get("X-Ingest-Key")
+		mu.Unlock()
+		http.Error(w, "no", http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	done := make(chan error, 1)
+	var out bytes.Buffer
+	args := []string{"--logs", dir, "--ingest-url", srv.URL, "--poll", "5ms"}
+	go func() {
+		done <- run(ctx, args, env(map[string]string{"RADAR_FEED_KEY": " " + fakeFeedKey + "\r\n"}), &out)
+	}()
+	time.Sleep(100 * time.Millisecond)
+	f, _ := os.OpenFile(logPath, os.O_APPEND|os.O_WRONLY, 0o600)
+	_, _ = f.WriteString("new line\n")
+	f.Close()
+	var err error
+	select {
+	case err = <-done:
+	case <-ctx.Done():
+		t.Fatal("run kept going after a 401")
+	}
+	want := "The server rejected the ingest key (401). The upload stopped; fix the key and click Start again."
+	if err == nil || err.Error() != want {
+		t.Fatalf("err = %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if hits != 1 || gotKey != fakeFeedKey {
+		t.Fatalf("hits %d key %q (want 1 hit with the trimmed key)", hits, gotKey)
+	}
+	if strings.Contains(out.String(), fakeFeedKey) || strings.Contains(err.Error(), fakeFeedKey) {
+		t.Fatal("the key was logged")
+	}
+}
+
+func TestParseConfigTrimsTheKeyFromTheEnvironment(t *testing.T) {
+	cfg, err := parseConfig(nil, env(map[string]string{"RADAR_FEED_KEY": "\n " + fakeFeedKey + " \r\n"}))
+	if err != nil || cfg.key != fakeFeedKey {
+		t.Fatalf("key %q err %v", cfg.key, err)
+	}
+}

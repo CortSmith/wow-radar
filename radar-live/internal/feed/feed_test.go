@@ -310,7 +310,7 @@ func TestStreamerStreamPathAppendedOnce(t *testing.T) {
 func TestStreamerRetriesAfterRejectionWithoutLosingLines(t *testing.T) {
 	ing := &fakeIngest{status: func(conn int) int {
 		if conn <= 2 {
-			return http.StatusConflict
+			return http.StatusServiceUnavailable
 		}
 		return 0
 	}}
@@ -521,8 +521,8 @@ func TestStreamerObserveReportsConnectSendAndServerReply(t *testing.T) {
 	}
 }
 
-func TestStreamerObserveReportsRejectionAndBackoff(t *testing.T) {
-	ing := &fakeIngest{status: func(int) int { return http.StatusUnauthorized }}
+func TestStreamerObserveReportsFailureAndBackoff(t *testing.T) {
+	ing := &fakeIngest{status: func(int) int { return http.StatusServiceUnavailable }}
 	srv := httptest.NewServer(http.HandlerFunc(ing.handler))
 	defer srv.Close()
 	events := &eventLog{}
@@ -531,7 +531,7 @@ func TestStreamerObserveReportsRejectionAndBackoff(t *testing.T) {
 	stop := runStreamer(t, observedStreamer(srv.URL, events), q)
 	defer stop()
 	ended := waitEvent(t, events, EventEnded)
-	if ended.Status != http.StatusUnauthorized || ended.Err == nil {
+	if ended.Status != http.StatusServiceUnavailable || ended.Err == nil {
 		t.Fatalf("ended = %+v", ended)
 	}
 	if b := waitEvent(t, events, EventBackoff); b.Wait <= 0 {
@@ -561,7 +561,7 @@ func TestKeyNeverReachesLogsOrEvents(t *testing.T) {
 	dead := httptest.NewServer(http.NotFoundHandler())
 	deadURL := dead.URL
 	dead.Close()
-	ing := &fakeIngest{status: func(int) int { return http.StatusUnauthorized }}
+	ing := &fakeIngest{status: func(int) int { return http.StatusServiceUnavailable }}
 	rejecting := httptest.NewServer(http.HandlerFunc(ing.handler))
 	defer rejecting.Close()
 	for _, url := range []string{deadURL, rejecting.URL} {

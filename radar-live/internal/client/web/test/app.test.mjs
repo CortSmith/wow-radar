@@ -115,6 +115,16 @@ test('Start sends the form, clears the key field and locks the inputs', async ()
   assert.equal(el('stateText').textContent, 'Waiting for the log file');
 });
 
+test('a refused key shows the error and leaves Start usable', async () => {
+  const error = 'The server rejected the ingest key (401). The upload stopped; fix the key and click Start again.';
+  const { app, el } = setup({ status: { running: false, state: 'error', error } });
+  await app.init();
+  assert.equal(el('stateText').textContent, 'Error');
+  assert.match(el('stateHint').textContent, /click Start again/);
+  assert.equal(el('startBtn').disabled, false);
+  assert.equal(el('key').disabled, false);
+});
+
 test('Start shows the server message when it refuses', async () => {
   const { app, el } = setup({ routes: { 'POST /api/start': () => ({ __status: 409, __body: { error: 'already_running', message: 'an upload is already running' } }) } });
   await app.init();
