@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nearby Radar</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="title"><strong>Nearby Radar</strong> <span data-mount="header-status" class="status"></span></div>
+  <div class="controls" data-mount="header-controls"></div>
+</header>
+<div data-mount="notice"></div>
+<main>
+  <section id="radarWrap" data-mount="radar"><noscript><p class="muted">This page needs JavaScript.</p></noscript></section>
+  <aside id="side">
+    <div data-mount="side-top"></div>
+    <div data-mount="side-panels"></div>
+    <div class="sidelist" data-mount="side-list"></div>
+  </aside>
+</main>
+<div data-mount="below"></div>
+<footer class="muted" data-mount="footer"></footer>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+# gosec findings reviewed and accepted (task 8.11; reasons in docs/security/supply-chain.md section 3).
+# Format: RULE path (no line numbers). security-scan fails on any gosec finding NOT listed here.
+G101 internal/client/server.go
+G103 cmd/radar-client/window_windows.go
+G103 internal/client/picker_windows.go
+G103 internal/mod/sqlstore/platform_windows.go
+G104 cmd/radar-client/window_windows.go
+G104 internal/feed/streamer.go
+G104 internal/mod/guard/abuse/store.go
+G115 internal/client/picker_windows.go
+G115 internal/mod/storetest/apply_cases.go
+G202 internal/mod/sqlstore/prune.go
+G202 internal/mod/sqlstore/read.go
+G204 cmd/radar-client/window_windows.go
+G304 cmd/radar-db/backup.go
+G304 cmd/radar-db/restore.go
+G304 cmd/radar-feed/main.go
+G304 cmd/radar-ingest/defaults.go
+G304 internal/client/settings.go
+G304 internal/core/envfile.go
+G304 internal/feed/tailer/tailer.go
+G304 internal/mod/guard/abuse/store.go
+G304 internal/mod/keys/keys.go
+G304 internal/mod/sqlstore/preflight.go
+G401 internal/mod/bountyx/analyzer.go
+G404 internal/mod/relay/relay.go
+G505 internal/mod/bountyx/analyzer.go
+G602 internal/mod/storetest/suite.go
+G703 cmd/radar-ingest/defaults.go
+G705 internal/client/web.go
+G705 internal/mod/static/static.go
+G204 internal/mod/guard/audit/alert.go

@@ -1,0 +1,28 @@
+# fail2ban jail for radar-live. Install as /etc/fail2ban/jail.d/radar-live.local (not a jail.local of its own,
+# so existing jails stay untouched), then `sudo systemctl reload fail2ban`.
+# Check:  sudo fail2ban-client status radar-live
+#
+# Both services log to /var/log/radar/ (security.log from radar-db, security-ingest.log from radar-ingest).
+# One log line stands for `count` events and is written at most once per address per minute and reason, so
+# maxretry counts "minutes with trouble": 20 of them within 10 minutes is a persistent offender.
+# The application already bans key guessers itself (abuse module); this adds a firewall-level ban.
+#
+# Behind a Cloudflare Tunnel the connection always comes from the local tunnel process, so a firewall ban
+# of the visitor address cannot work there; rely on the app-level bans and Cloudflare's own rules in that mode.
+[radar-live]
+enabled  = true
+filter   = radar-live
+logpath  = /var/log/radar/security.log
+           /var/log/radar/security-ingest.log
+backend  = auto
+maxretry = 20
+findtime = 10m
+bantime  = 1h
+ignoreip = 127.0.0.1/8 ::1
+port     = 8787
+protocol = tcp
+banaction = ufw
+# journal alternative (when RADAR_AUDIT_LOG is unset the lines go to the journal):
+#   backend = systemd
+#   journalmatch = _SYSTEMD_UNIT=radar-db.service + _SYSTEMD_UNIT=radar-ingest.service
+#   and remove the logpath lines.

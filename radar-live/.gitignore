@@ -1,0 +1,28 @@
+# Secrets and local config: never commit
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
+*.key
+*.pem
+*.p12
+secrets/
+radar-client-settings.json
+settings.local.json
+
+# Data and build output
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+dist/
+*.log
+node_modules/
+
+# Synthetic test fixtures are tracked
+!**/testdata/*.log
+!testdata/*.log
+
+# Built binaries
+*.exe

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="radar-token" content="{{.Token}}">
+<title>Radar Client</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Radar Client</h1>
+  <span class="badge idle" id="stateBadge"><span class="dot"></span><span id="stateText">Loading...</span></span>
+</header>
+<p class="hint" id="stateHint"></p>
+<p class="warn" id="loadWarning" hidden></p>
+
+<main>
+  <section class="panel" aria-label="Settings">
+    <label for="server">Server address</label>
+    <input id="server" type="text" spellcheck="false" autocomplete="off" placeholder="http://server:8788">
+    <p class="msg" id="serverMsg"></p>
+
+    <label for="key">Ingest key</label>
+    <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Kept in memory for this run only">
+    <p class="hint" id="keyHint"></p>
+
+    <label for="ruleset">Rule-set</label>
+    <select id="ruleset">
+      <option value="">Auto (detect from the log)</option>
+      <option value="normal">Normal</option>
+      <option value="pvp">PvP</option>
+      <option value="rp">RP</option>
+      <option value="rppvp">RP-PvP</option>
+    </select>
+    <p class="msg" id="rulesetMsg"></p>
+
+    <label for="logPath" id="logLabel">Log file</label>
+    <div class="row">
+      <input id="logPath" type="text" spellcheck="false" autocomplete="off" placeholder="C:\...\Logs\WoWCombatLog.txt">
+      <button class="btn" id="browse" type="button">Browse...</button>
+    </div>
+    <p class="msg" id="logMsg"></p>
+
+    <label class="check"><input id="followNewest" type="checkbox"> Use newest log in folder (follows a new log when WoW starts one)</label>
+    <label class="check"><input id="includeExisting" type="checkbox"> Include existing content (send the whole file first, at a limited speed)</label>
+
+    <div class="warnings" id="formWarnings"></div>
+    <p class="msg error" id="formMsg"></p>
+
+    <div class="row buttons">
+      <button class="btn primary" id="startBtn" type="button">Start</button>
+      <button class="btn" id="stopBtn" type="button" disabled>Stop</button>
+      <button class="btn" id="quitBtn" type="button" hidden>Quit</button>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Status">
+    <h2>Status</h2>
+    <dl id="statusRows"></dl>
+    <h2>Events</h2>
+    <pre id="eventLog" aria-live="polite"></pre>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>

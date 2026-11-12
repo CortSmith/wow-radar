@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"cmp"
 	"math"
 	"reflect"
 	"slices"
@@ -55,6 +56,13 @@ func (c Contact) MatchesQuery(q string) bool {
 		return true
 	}
 	return slices.ContainsFunc(c.PastNames, func(n string) bool { return strings.Contains(strings.ToLower(n), q) })
+}
+
+// SortNewestFirst orders contacts by lastSeen descending, then guid ascending (a total order).
+func SortNewestFirst(contacts []Contact) {
+	slices.SortFunc(contacts, func(a, b Contact) int {
+		return cmp.Or(cmp.Compare(b.LastSeen, a.LastSeen), cmp.Compare(a.GUID, b.GUID))
+	})
 }
 
 // Clone returns a copy that shares no slices with c.

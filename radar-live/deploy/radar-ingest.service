@@ -1,0 +1,70 @@
+[Unit]
+Description=radar-live ingest server (combat log streams -> contacts -> radar-db)
+Documentation=file:///usr/local/share/doc/radar-live/README-xubuntu.md
+After=network.target radar-db.service
+Wants=radar-db.service
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=radar
+Group=radar
+Environment=RADAR_INGEST_LISTEN=127.0.0.1:8788
+Environment=RADAR_DB_URL=http://127.0.0.1:8789
+Environment=RADAR_AUDIT_LOG=/var/log/radar/security-ingest.log
+EnvironmentFile=/etc/radar-live/radar.env
+# Ingest reaches radar-db through RADAR_DB_URL: the INTERNAL listener (default
+# http://127.0.0.1:8789). The public listener does not serve the write API.
+ExecStart=/usr/local/bin/radar-ingest --listen ${RADAR_INGEST_LISTEN}
+WorkingDirectory=/
+# It buffers (bounded) while radar-db is down, so a restart of either one is harmless.
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+# Ingest writes no data: no ReadWritePaths, no StateDirectory. Only its own security log
+# (/var/log/radar/security-ingest.log) and a private runtime dir are writable.
+LogsDirectory=radar
+LogsDirectoryMode=0700
+RuntimeDirectory=radar-ingest
+RuntimeDirectoryMode=0700
+
+LimitNOFILE=4096
+MemoryHigh=160M
+MemoryMax=192M
+TasksMax=256
+CPUQuota=150%
+
+# Sandbox: same as radar-db, see there.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

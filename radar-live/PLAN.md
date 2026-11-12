@@ -143,18 +143,23 @@ last event), `GET /healthz`. Ruleset auto-detected from the realm token (as in g
 5. Stage end: update the stage plan file (done / test counts / deviations), lead review pass (run everything, read the diff, fix
    findings), entry in `docs/plans/STATUS.md`.
 6. No secrets in logs; constant-time key compare; request body and line size caps; bounded buffers everywhere (weak laptop).
+7. **No secrets, tokens or personal information in the repository** (user rule). Secret settings come from application-specific
+   `RADAR_*` environment variables only; see `docs/security/secrets-policy.md`. Example files hold placeholders; tests use fake values.
 
 ## 6. Stages
 
-| # | Stage | Plan file | Depends on |
-|---|---|---|---|
-| 1 | Core host, sockets, domain types, memstore, architecture test | `docs/plans/stage-1-core.md` | - |
-| 2 | Parsing + extraction modules (logparse, contactx, bountyx) | `docs/plans/stage-2-parsing.md` | 1 |
-| 3 | SQLite store (sqlstore): merge, idempotency, queries | `docs/plans/stage-3-sqlstore.md` | 1 |
-| 4 | radar-db binary: readapi, writeapi, keys | `docs/plans/stage-4-db-server.md` | 1, 3 |
-| 5 | radar-ingest binary: streamapi, relay | `docs/plans/stage-5-ingest.md` | 1, 2, API contract |
-| 6 | Web page (60 s sweep, looks like go-radar) + static module | `docs/plans/stage-6-web.md` | API contract |
-| 7 | Feeder, Linux packaging, e2e smoke, docs | `docs/plans/stage-7-hosting.md` | all |
-| 8 | Security: DDoS protection, rate limiting, hardening (tasks 8.1 to 8.12) | `docs/plans/security-plan.md` | 7 |
+| # | Stage | Plan file | Depends on | State |
+|---|---|---|---|---|
+| 1 | Core host, sockets, domain types, memstore, architecture test | `docs/plans/stage-1-core.md` | - | done |
+| 2 | Parsing + extraction modules (logparse, contactx, bountyx) | `docs/plans/stage-2-parsing.md` | 1 | done |
+| 3 | SQLite store (sqlstore): merge, idempotency, queries | `docs/plans/stage-3-sqlstore.md` | 1 | done |
+| 4 | radar-db binary: readapi, writeapi, keys | `docs/plans/stage-4-db-server.md` | 1, 3 | done |
+| 5 | radar-ingest binary: streamapi, relay | `docs/plans/stage-5-ingest.md` | 1, 2, API contract | done |
+| 6 | Web page (60 s sweep, looks like go-radar) + static module | `docs/plans/stage-6-web.md` | API contract | done |
+| 7 | Feeder, Linux packaging, e2e smoke, docs | `docs/plans/stage-7-hosting.md` | all | done |
+| 8 | Security: DDoS protection, rate limiting, hardening (tasks 8.1 to 8.12) | `docs/plans/security-plan.md` | 7 | 8.1 done, rest open |
+| 9 | radar-client: windowed desktop app, choose the log file, click Start, live upload on every change | `docs/plans/stage-9-client.md` | 5, 7 | done |
+
+Live per-stage detail: `docs/plans/STATUS.md`.
 
 Stages 2, 3, 6 run in parallel after 1 (disjoint directories); 4 and 5 run in parallel after those. Subagents: Sonnet, medium effort.

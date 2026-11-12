@@ -76,11 +76,12 @@ func isRedundantFix(previous, next Fix) bool {
 		math.Hypot(previous.X-next.X, previous.Y-next.Y) < FixDedupeDistanceYd
 }
 
-// AppendFixes adds incoming fixes to a time-ordered trail and returns the new trail.
+// AppendFixes adds incoming fixes to a time-ordered trail and returns the new trail. It may reuse
+// the storage of trail, so callers must replace their copy with the result and not use the old slice.
 // Only fixes strictly newer than the stored last fix are considered (so replays never duplicate),
 // redundant ones are skipped, and the oldest fixes are dropped beyond TrailCapFixes.
 func AppendFixes(trail, incoming []Fix) []Fix {
-	out := slices.Clone(trail)
+	out := trail
 	for _, f := range CleanFixes(incoming) {
 		if len(out) > 0 {
 			last := out[len(out)-1]
@@ -91,7 +92,7 @@ func AppendFixes(trail, incoming []Fix) []Fix {
 		out = append(out, f)
 	}
 	if over := len(out) - TrailCapFixes; over > 0 {
-		out = slices.Clone(out[over:])
+		out = slices.Delete(out, 0, over)
 	}
 	return out
 }

@@ -35,10 +35,10 @@ type Sector struct {
 // Validate checks that the sector is internally consistent.
 func (s Sector) Validate() error {
 	if !s.RS.Valid() {
-		return invalidf("unknown ruleset %q", s.RS)
+		return invalidf("unknown ruleset")
 	}
 	if !s.Group.Valid() {
-		return invalidf("unknown group %q", s.Group)
+		return invalidf("unknown group")
 	}
 	if s.Since < 0 || s.ActiveWithinMs < 0 {
 		return invalidf("since and activeWithin must not be negative")
@@ -54,7 +54,7 @@ func (s Sector) Validate() error {
 			return invalidf("scope player needs guid")
 		}
 	default:
-		return invalidf("unknown scope %q", s.Scope)
+		return invalidf("unknown scope")
 	}
 	return nil
 }
@@ -106,9 +106,9 @@ const (
 func (q SearchQuery) Validate() error {
 	switch {
 	case !q.RS.Valid():
-		return invalidf("unknown ruleset %q", q.RS)
+		return invalidf("unknown ruleset")
 	case !q.Group.Valid():
-		return invalidf("unknown group %q", q.Group)
+		return invalidf("unknown group")
 	case q.Limit < 0 || q.Offset < 0:
 		return invalidf("limit and offset must not be negative")
 	}

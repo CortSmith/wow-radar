@@ -37,3 +37,48 @@ flush deltas/idempotent re-flush -> trails -> bountyx windows/dedupe -> module w
 
 ## Done when
 gofmt/vet/test green, >= 85% coverage per package, README-style package comments, STATUS.md line added, Results section appended here.
+
+## Results (Stage 2 complete)
+
+**Built.** `internal/domain/event.go` (+ `event_test.go`), `internal/mod/logparse`, `internal/mod/contactx`, `internal/mod/bountyx`.
+`gofmt -l` empty, `go vet` clean, `go test` green incl. the core architecture test (modules import only `core` and `domain`).
+
+| Package | Coverage |
+|---|---|
+| logparse | 98.3% |
+| contactx | 95.9% |
+| bountyx | 95.5% |
+| domain (whole package) | 98.6% |
+
+**Exported API**
+- `domain`: `Event` (`Source, TimeMs, Name, Src, Dst EventUnit, Info *EventInfo, Amount, HasAmount, IsDamage, IsHeal,
+  Unconscious, Zone, Chart *Chart, AdvancedEnabled *bool, Ruleset`), `EventUnit` (`GUID, Raw, Flags, RaidFlags`; `Kind/IsPlayer/IsMine/Reaction`),
+  `EventInfo`, `RawLine{Source, Text}`, `GUIDKind`/`KindOf`, `ReactionFromFlags`, `Namer` (`NewNamer, Observe, Suffix, Display`).
+- `logparse`: `ParseLine(line, Options{FallbackZone, Source}) (domain.Event, error)`, `DetectRealmToken`, `ErrBadLine`, `ErrLineTooLong`,
+  `MaxLineBytes`, `New()` module (setting `logparse-zone`, default UTC). Parser accepts `domain.RawLine`, feeds `domain.Event` back to `host.Parsers`.
+- `contactx`: `NewExtractor(Options{TrackNPCs, DisableApprox, ApproxMaxAge, MaxContacts, RealmSuffix})`, `Feed(Event)`,
+  `Flush(now) Part{Ruleset, Contacts []PingContact, Charts []Chart}`, `Me()`, `Tracked()`; `New()` module (settings `contactx-flush` 10 s,
+  `contactx-ruleset`, `contactx-track-npcs`).
+- `bountyx`: `NewAnalyzer(Options{RealmSuffix})`, `Feed(Event)`, `Flush() Part{Ruleset, Deaths []Death, Credits map[guid]Credit{Raw,Name,KB,Assists,LastMs}}`,
+  `Stats()`; `New()` module (settings `bountyx-flush`, `bountyx-ruleset`).
+
+**Wiring.** Streaming consumer: per received line call `host.Parsers.Feed(ctx, domain.RawLine{Source, Text})`. logparse parses and re-feeds the
+`domain.Event`; contactx and bountyx keep one Extractor/Analyzer per `Event.Source` and, from their `Start` loops, publish `domain.Ping`s to
+`host.Sinks` every flush interval (ruleset = detected realm token else the module setting; unique `cx-`/`bx-` batch ids; players only; split at 500 contacts).
+`Stop` does a final flush. Direct use without the socket: `ParseLine` -> `Extractor.Feed` / `Analyzer.Feed` -> `Flush`.
+
+**Deviations / decisions**
+- The shared event type needed more than a struct: `Namer`, `KindOf`, `ReactionFromFlags` also live in `domain/event.go` (contactx and bountyx cannot import logparse).
+- `Event.Ruleset` is set by logparse from the log owner's raw name; sources without a token use the module setting.
+- `bountyx.Flush()` takes no time argument. Bounty credits arrive as pings whose contacts hold only kb/assist deltas, hostile reaction, first/lastSeen = death time.
+- Sink failure drops that flush's deltas (the relay sink in stage 5 owns buffering and retry); `Flush` returns the first sink error.
+- A death whose killer is a friendly player (or friendly pet) gives no credit to anyone, as in go-radar. Valid-but-short records (<9 fields) parse to a name-only Event.
+- `-race` not run (no cgo).
+
+## Results (realm suffix fix)
+
+- `domain.Namer` now counts trailing-token runs per distinct name and locks the longest run shared by >= 6 distinct players, so a minority with another suffix no longer blocks detection (it keeps dashes-as-spaces display). Below the threshold nothing is stripped.
+- New settings `contactx-realm-suffix` / `bountyx-realm-suffix` (default empty = auto-detect) are passed to the Extractor / Analyzer.
+- contactx: `name` is the display name, `raw` the original; when detection changes the display name, the previously published one is added once to `pastNames`.
+- bountyx: credit names are resolved at Flush, so they follow a later detection.
+- Tests added in domain, contactx and bountyx; gofmt, vet and `go test ./internal/... -cover` pass (incl. the core architecture test).

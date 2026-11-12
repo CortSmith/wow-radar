@@ -1,0 +1,79 @@
+[Unit]
+Description=radar-live database server (SQLite, read API, web page)
+Documentation=file:///usr/local/share/doc/radar-live/README-xubuntu.md
+After=network.target
+# Crash loop guard: more than 5 starts in 2 minutes and systemd stops retrying (see journalctl, then
+# `systemctl reset-failed radar-db`). Sandbox rationale for every line: docs/security/hardening.md.
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=radar
+Group=radar
+# Defaults first, then the env file overrides them.
+Environment=RADAR_DB_LISTEN=:8787
+Environment=RADAR_DB_INTERNAL_LISTEN=127.0.0.1:8789
+Environment=RADAR_AUDIT_LOG=/var/log/radar/security.log
+EnvironmentFile=/etc/radar-live/radar.env
+# Two listeners: RADAR_DB_LISTEN serves the page, /api/* and /healthz; RADAR_DB_INTERNAL_LISTEN
+# (loopback) serves only the write API /internal/* and /healthz. Keep the second one on loopback.
+ExecStart=/usr/local/bin/radar-db --listen ${RADAR_DB_LISTEN} --internal-listen ${RADAR_DB_INTERNAL_LISTEN}
+WorkingDirectory=/var/lib/radar-live
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+
+# Directories systemd creates and owns for the service: data (0700, the only writable place),
+# the security log (/var/log/radar, 0700, read by fail2ban as root) and a private runtime dir.
+StateDirectory=radar-live
+StateDirectoryMode=0700
+LogsDirectory=radar
+LogsDirectoryMode=0700
+RuntimeDirectory=radar-live
+RuntimeDirectoryMode=0700
+ReadWritePaths=/var/lib/radar-live
+
+# Resource ceilings for a weak laptop. GOMEMLIMIT / GOMAXPROCS in the env file are the soft limits;
+# MemoryHigh throttles before MemoryMax kills.
+LimitNOFILE=4096
+MemoryHigh=160M
+MemoryMax=192M
+TasksMax=256
+CPUQuota=150%
+
+# Sandbox. Ports are above 1024, so no capability is needed at all.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+LockPersonality=yes
+# Go and modernc.org/sqlite (transpiled C, no JIT) never need writable+executable memory.
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+# Allow the usual service calls, deny privileged and resource-tuning ones. A denied call returns
+# EPERM (which the Go runtime tolerates) instead of killing the process with SIGSYS.
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -31,11 +31,19 @@ func (r Ruleset) Valid() bool {
 	return false
 }
 
+// Validate returns an error wrapping ErrInvalid unless r is a supported ruleset.
+func (r Ruleset) Validate() error {
+	if !r.Valid() {
+		return invalidf("unknown ruleset")
+	}
+	return nil
+}
+
 // ParseRuleset converts text (case-insensitive, trimmed) into a Ruleset.
 func ParseRuleset(text string) (Ruleset, error) {
 	r := Ruleset(strings.ToLower(strings.TrimSpace(text)))
 	if !r.Valid() {
-		return "", invalidf("unknown ruleset %q", text)
+		return "", invalidf("unknown ruleset")
 	}
 	return r, nil
 }

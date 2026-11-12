@@ -1,0 +1,7 @@
+# /etc/cron.d/radar-live-backup  (copy this file there; format: min hour dom mon dow USER command)
+# Nightly consistent copy of the database (SQLite VACUUM INTO, safe while radar-db runs). Each run writes
+# /var/backups/radar-live/radar-<UTC timestamp>.db (mode 0600, never overwriting), verifies it with
+# quick_check, and only then deletes the oldest radar-*.db files beyond the newest 14. A failed
+# verification keeps all older backups. install.sh creates /var/backups/radar-live.
+# Restore: see deploy/README-xubuntu.md, section 6 (Backups, restore and data safety).
+17 3 * * * radar /usr/local/bin/radar-db backup --db-path /var/lib/radar-live/radar-live.db --keep 14 /var/backups/radar-live

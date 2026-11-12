@@ -47,3 +47,29 @@ Maps: reuse `../../../maps/index.json` format; do not copy the 88 MB PNGs; the p
 
 ## Done when
 `node --test site/test/*.test.js` green, Go test green, Results section appended here, STATUS.md line added.
+
+## Results (Stage 6 complete)
+
+**Built.** `site/` (index.html, style.css, `js/` core + 12 feature files, `ARCHITECTURE.md`, `dev-server.mjs`, `dev-demo.mjs`,
+`embed.go`) and `internal/mod/static` (module `static`, `--site-dir` override, ETag + cache headers, nosniff, `/api/*` never
+shadowed: unknown API paths get the JSON error). Checked in headless Edge against the dev server (map image, pips, list,
+bounty, countdown all render).
+
+**Tests.** `node --test site/test/*.test.js`: 58 tests, all green (logic/projection/format 19, scheduler 7, client 5, scene +
+demo 7, boot 13 incl. each-feature-removed-in-turn and zero-features, safety 4 (no innerHTML/eval/inline script/style/handlers,
+no external URLs), dev-server 3). Go: `internal/mod/static` 9 tests, 95.0% coverage; `internal/core` architecture test still green;
+gofmt/vet clean for my packages.
+
+**Deviations / decisions.**
+- The Go embed lives in `site/embed.go` (package `site`, exported `FS()`), because `go:embed` cannot reach up out of
+  `internal/mod/static`. The static module imports `radarlive/site`; the architecture test allows this (it only forbids module-to-module imports).
+- `features.js` is a list of dynamic-import loaders, one line per feature, so a deleted file plus its line never breaks the page
+  (a failed import is skipped at runtime too).
+- `ads` feature not built (marked optional). Zone images load from `maps/` (same-origin folder, `?maps=` URL override is the only
+  accepted URL parameter, so a crafted link cannot redirect API calls); the dev server serves `../../maps` without copying PNGs.
+- Zone picker is a `<select>` fed by `/api/v1/charts`, not a combobox. Red-only sends `grp=hostile` as the contract says (neutrals
+  hidden by the server in that case). Blue/Red/Stale checkboxes also filter the view client-side.
+- Backoff: retries after 5 s, 10 s, 20 s ... capped at 5 min; aborted requests (sector change) are not counted as failures.
+- `site/package.json` only contains `{"type":"module"}` so node treats `.js` as ES modules (no dependencies, no npm).
+- Page code never sets the style attribute; the tooltip position uses CSSOM, which strict CSP permits.
+- Not verified here: behaviour against the real radar-db (only the demo API); `-race` N/A.
