@@ -13,6 +13,12 @@ What it does
      (WorldMapOverlay / WorldMapOverlayTile tables, read from the same install) are painted on top.
   5. Stitches each zone into one image: maps\\<Zone>.png, plus maps\\index.json for the web page.
 
+  --world mode: additionally reads the UiMap / UiMapAssignment tables to work out which continent each
+  known zone belongs to and where that zone's rectangle sits inside the continent's own world-space box,
+  then emits maps\\world\\<Continent>.png (reusing the continent art already produced above) plus
+  maps\\world\\index.json with each zone's pixel rectangle inside that continent image, for the page's
+  world/"All Zones" map view.
+
 Needs Python 3.9+ and Pillow (py -m pip install pillow). Safe to re-run: finished zones are skipped.
 Read-only on the game files.
 """
@@ -88,6 +94,13 @@ UIMAP = {
 }
 # file data ids of the game tables that describe the exploration overlays
 FDID_UIMAPXMAPART, FDID_WORLDMAPOVERLAY, FDID_WORLDMAPOVERLAYTILE = 1957217, 1134579, 1957212
+# file data ids of the UiMap node tree + per-node world-space region box (used by --world)
+FDID_UIMAP, FDID_UIMAPASSIGNMENT = 1957206, 1957219
+UIMAP_TYPE_CONTINENT = 2
+# continent uiMapIDs that this script's classic-era UIMAP zones resolve under (confirmed in
+# docs/plans/world-map-notes.md): 1414 = Kalimdor, 1415 = Eastern Kingdoms. Display name -> the
+# matching ZONES folder, so the already-extracted continent PNG can be reused as-is.
+CONTINENTS = {1414: "Kalimdor", 1415: "Eastern Kingdoms"}
 
 
 def norm(name):
@@ -467,7 +480,7 @@ class DB2:
                         vals.append(list(struct.unpack_from("<%dI" % v2, self.pal, pals[i] + 4 * v2 * self._bits(rec, fo, v1))))
                     else:
                         vals.append(None)
-                self.rows.append({"vals": vals, "id": ids[r] if ids else None, "rel": rel.get(r)})
+                self.rows.append({"vals": vals, "id": ids[r] if ids else None, "rel": rel.get(r), "raw": rec})
 
     @staticmethod
     def _bits(buf, bitpos, n):
@@ -476,6 +489,14 @@ class DB2:
         b0 = bitpos >> 3
         nb = ((bitpos & 7) + n + 7) >> 3
         return (int.from_bytes(buf[b0:b0 + nb], "little") >> (bitpos & 7)) & ((1 << n) - 1)
+
+    @staticmethod
+    def floats_at(raw, byte_offset, n):
+        """Reinterpret n little-endian floats starting at a known byte offset in a row's raw record
+        bytes. Narrowly scoped: the generic bitfield decoder above has no float support, but for a
+        fixed-layout region field (byte offset/width known from the client's field-size-info table) a
+        direct struct.unpack is simpler and exact. Not a general float-aware column reader."""
+        return struct.unpack_from("<%df" % n, raw, byte_offset)
 
 
 def overlay_plan(xmap_raw, ov_raw, tile_raw):
@@ -492,6 +513,61 @@ def overlay_plan(xmap_raw, ov_raw, tile_raw):
         if v[0] in tiles:
             overlays.setdefault(v[1], []).append({"w": v[2], "h": v[3], "ox": v[4], "oy": v[5], "tiles": tiles[v[0]]})
     return art_of, overlays
+
+
+def uimap_tree(raw):
+    """UiMap.db2 rows -> {uiMapID: (parentUiMapID, type)}."""
+    tree = {}
+    for r in DB2(raw).rows:
+        v = r["vals"]
+        tree[v[1]] = (v[2], v[5])
+    return tree
+
+
+def continent_of(tree, uid):
+    """Walk a UiMap node's parent chain up to the nearest CONTINENT-type ancestor's id, or None."""
+    seen = set()
+    cur = uid
+    while cur in tree and cur not in seen:
+        seen.add(cur)
+        parent, typ = tree[cur]
+        if typ == UIMAP_TYPE_CONTINENT:
+            return cur
+        cur = parent
+    return None
+
+
+def uimap_regions(raw):
+    """UiMapAssignment.db2 rows -> {uiMapID: (minX, minY, maxX, maxY)} in world-yard coordinates.
+    The region field is a fixed-layout 192-bit (24-byte) blob at byte offset 16 (bit offset 128):
+    six little-endian floats [AreaMin.X, AreaMin.Y, AreaMin.Z, AreaMax.X, AreaMax.Y, AreaMax.Z] - the
+    Z pair is an unbounded +-1000000 sentinel and is ignored here."""
+    out = {}
+    for r in DB2(raw).rows:
+        uid = r["rel"]
+        if uid is None or uid in out:
+            continue
+        minx, miny, _minz, maxx, maxy, _maxz = DB2.floats_at(r["raw"], 16, 6)
+        out[uid] = (minx, miny, maxx, maxy)
+    return out
+
+
+def world_to_px(x, y, cbox, w, h):
+    """Same axis convention as site/js/projection.js's worldToPct: high world-X is the top of the
+    image, high world-Y is the left edge."""
+    cminx, cminy, cmaxx, cmaxy = cbox
+    px = (cmaxy - y) / (cmaxy - cminy) * w if cmaxy != cminy else w / 2
+    py = (cmaxx - x) / (cmaxx - cminx) * h if cmaxx != cminx else h / 2
+    return px, py
+
+
+def zone_rect_px(zbox, cbox, w, h):
+    zminx, zminy, zmaxx, zmaxy = zbox
+    p1 = world_to_px(zminx, zminy, cbox, w, h)
+    p2 = world_to_px(zmaxx, zmaxy, cbox, w, h)
+    x0, x1 = sorted((p1[0], p2[0]))
+    y0, y1 = sorted((p1[1], p2[1]))
+    return round(x0), round(y0), round(x1 - x0), round(y1 - y0)
 
 
 def reveal(base, overlays, raw_of):
@@ -588,6 +664,96 @@ class Fetcher:
         return out
 
 
+def open_game(args, data_dir):
+    """Resolve the build config and open the local CASC store + root + a Fetcher. Shared by the
+    per-zone pipeline (main) and --world."""
+    info = build_info(args.wow)
+    cfg = find_build_config(data_dir, info)
+    print("Build: %s  (%s)" % (cfg.get("build-name", "?"), PRODUCT))
+    casc = Casc(data_dir)
+    enc_ckey, enc_ekey = [bytes.fromhex(x) for x in cfg["encoding"].split()[:2]]
+    enc = Encoding(casc.read(enc_ekey))
+    root_ckey = bytes.fromhex(cfg["root"])
+    root = None
+    for ek in enc.ekeys(root_ckey):
+        root = casc.read(ek)
+        if root:
+            break
+    if root is None:
+        raise SystemExit("Could not read the root file from local storage")
+    fetcher = Fetcher(args, data_dir, info, casc, enc)
+    return info, casc, enc, root, fetcher
+
+
+def extract_world(args):
+    """--world mode: place this script's known UIMAP zones inside their continent's already-extracted
+    image (maps\\<Continent>.png), using UiMap.db2 + UiMapAssignment.db2 for the zone/continent tree
+    and each node's world-space region box. Writes maps\\world\\<Continent>.png + world\\index.json."""
+    data_dir = args.data_dir or os.path.join(args.wow, "Data")
+    world_dir = os.path.join(args.out, "world")
+    os.makedirs(world_dir, exist_ok=True)
+    index_path = os.path.join(world_dir, "index.json")
+    if os.path.exists(index_path) and not args.force:
+        print("Nothing to do: %s already exists (use --force to redo)." % index_path)
+        return
+
+    t0 = time.time()
+    _info, _casc, _enc, root, fetcher = open_game(args, data_dir)
+    found = find_files(root, {}, {FDID_UIMAP: "uimap", FDID_UIMAPASSIGNMENT: "uimapassign"})
+    del root
+    if len(found) < 2:
+        raise SystemExit("UiMap.db2 / UiMapAssignment.db2 not found in this build's root")
+    raw = fetcher.get(found, "World map tables")
+    if len(raw) < 2:
+        raise SystemExit("Could not read UiMap.db2 / UiMapAssignment.db2 (%d of 2)" % len(raw))
+
+    tree = uimap_tree(raw["uimap"])
+    regions = uimap_regions(raw["uimapassign"])
+    folder_of = {name: folder for name, folder in ZONES}
+
+    continents_out = []
+    placed, skipped = 0, []
+    for cid, cname in CONTINENTS.items():
+        cbox = regions.get(cid)
+        folder = folder_of.get(cname)
+        if cbox is None or not folder:
+            print("  skip continent %-16s (no region box or no known art folder)" % cname)
+            continue
+        png_path = os.path.join(args.out, folder + ".png")
+        if not os.path.exists(png_path):
+            print("  skip continent %-16s (%s not extracted yet - run extract_maps.py without --world first)"
+                  % (cname, png_path))
+            continue
+        from PIL import Image
+        with Image.open(png_path) as im:
+            w, h = im.size
+
+        zones_out = []
+        for zname, uid in UIMAP.items():
+            if continent_of(tree, uid) != cid:
+                continue
+            zbox = regions.get(uid)
+            if zbox is None:
+                skipped.append("%s (no UiMapAssignment region row)" % zname)
+                continue
+            x, y, zw, zh = zone_rect_px(zbox, cbox, w, h)
+            zones_out.append({"mapId": uid, "name": zname, "x": x, "y": y, "w": zw, "h": zh})
+            placed += 1
+        zones_out.sort(key=lambda z: z["mapId"])
+
+        dest_name = folder + ".png"
+        with Image.open(png_path) as im:
+            im.save(os.path.join(world_dir, dest_name))
+        continents_out.append({"id": norm(cname), "name": cname, "file": dest_name, "w": w, "h": h,
+                                "zones": zones_out})
+        print("  wrote world\\%s (%dx%d, %d zone(s) placed)" % (dest_name, w, h, len(zones_out)))
+
+    json.dump({"continents": continents_out}, open(index_path, "w", encoding="utf-8"), indent=1)
+    print("Done: %d continent(s), %d zone(s) placed in %.0fs." % (len(continents_out), placed, time.time() - t0))
+    if skipped:
+        print("Could not place %d zone(s): %s" % (len(skipped), ", ".join(skipped)))
+
+
 def main():
     ap = argparse.ArgumentParser(description="Extract zone maps from WoW Forever for Nearby Tracker")
     ap.add_argument("--wow", default=DEFAULT_WOW, help="World of Warcraft folder (default: %(default)s)")
@@ -598,10 +764,15 @@ def main():
     ap.add_argument("--no-overlays", action="store_true", help="base parchment only (zones look unexplored)")
     ap.add_argument("--cdn-host", action="append", help="extra CDN host to try first")
     ap.add_argument("--force", action="store_true", help="redo zones that already have a finished image")
+    ap.add_argument("--world", action="store_true",
+                     help="place known zones inside their continent's image instead (maps\\world\\*)")
     args = ap.parse_args()
 
     data_dir = args.data_dir or os.path.join(args.wow, "Data")
     os.makedirs(args.out, exist_ok=True)
+    if args.world:
+        extract_world(args)
+        return
     zones = ZONES
     if args.only:
         want = {norm(z) for z in args.only.split(",")}
@@ -629,21 +800,7 @@ def main():
         return
 
     t0 = time.time()
-    info = build_info(args.wow)
-    cfg = find_build_config(data_dir, info)
-    print("Build: %s  (%s)" % (cfg.get("build-name", "?"), PRODUCT))
-    casc = Casc(data_dir)
-    enc_ckey, enc_ekey = [bytes.fromhex(x) for x in cfg["encoding"].split()[:2]]
-    enc = Encoding(casc.read(enc_ekey))
-    root_ckey = bytes.fromhex(cfg["root"])
-    root = None
-    for ek in enc.ekeys(root_ckey):
-        root = casc.read(ek)
-        if root:
-            break
-    if root is None:
-        raise SystemExit("Could not read the root file from local storage")
-    fetcher = Fetcher(args, data_dir, info, casc, enc)
+    _info, _casc, _enc, root, fetcher = open_game(args, data_dir)
 
     # base art (by path) and the three overlay tables (by file id)
     wanted = {}

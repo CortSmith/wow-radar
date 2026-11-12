@@ -83,6 +83,9 @@ Use `--no-overlays` to skip that. Zones already done are skipped; zones saved wi
    Defaults: `--wow "C:\Program Files (x86)\World of Warcraft\_forever_"`, `--out maps`.
 - Tiles the client has not stored locally are downloaded from Blizzard's CDN (internet needed). If you only
   want local files, add `--no-cdn`. Opening the world map in game for a zone may make the client cache it.
+- `py extract_maps.py --world` (run after the step above) places each known zone inside its continent's image,
+  writing `maps\world\<Continent>.png` plus `maps\world\index.json` (zone pixel rectangles) for a future
+  world/"All Zones" map view.
 - Zones missing from `maps` simply show no image. Dots, names and heat are always drawn above the map.
 - For your own use only; don't share the extracted images.
 
