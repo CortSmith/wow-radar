@@ -76,3 +76,6 @@ stage, a review pass after each stage. Subagents: **Sonnet, medium effort**; lea
 - User decisions pending: run 8.12a?; add `toolchain go1.27.4` to go.mod and upgrade local Go (13 reachable stdlib vulns on 1.27.1); untrack go-radar/dist history files (possible real names).
 - Not yet run by a human: install.sh on the Xubuntu laptop, verify-hardening.sh, client Browse dialog on Windows.
 - Nothing committed. Quick local test recipe is in the chat history: run radar-db (RADAR_REQUIRE_KEYS=false, --listen 127.0.0.1:8787 --internal-listen 127.0.0.1:8789), radar-ingest (RADAR_LOGPARSE_ALLOW_REPLAY=true, --db-url http://127.0.0.1:8789), POST a log to :8788/v1/lines.
+
+## Next feature (planned, NOT started): Stage 10 armory module
+Plan only: docs/plans/stage-10-armory.md (tasks A0-A8). Gate: A0 needs the official WoW Forever API docs URL from the user. Secrets: env/_FILE only, never shown to Claude; typing recipe is in section 3 of the plan.
