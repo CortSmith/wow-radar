@@ -150,3 +150,208 @@ requires.
 | `UiMapAssignment.db2` | 1957219 | confirmed, local, WDC5, 61 rows |
 | `WorldMapContinent.db2` | 1343594 (listfile guess) | not present in this build — expected, unused |
 | `Map.db2` | 1349477 (listfile guess) | present but encrypted — not needed |
+
+## 2026-11-12 — combined "Azeroth" world map: disambiguation attempt FAILED, no composite built
+
+Task: replace the two-continent `maps/world/index.json` (separate Kalimdor/Eastern Kingdoms canvases, each in its
+own local world-yard frame) with one combined canvas showing both continents correctly positioned relative to
+each other. Hypothesis to test: uiMapID 947 ("Azeroth", the WORLD-type parent of both continents) has, besides
+its two known duplicate `UiMapAssignment` rows (noted above), a disambiguating field that would let us pick
+"947's row that places Kalimdor inside Azeroth's own canvas" vs. "the row that places Eastern Kingdoms", distinct
+from each continent's own self-frame region (1414/1415, used today for zone placement).
+
+**Method.** Wrote a throwaway script (scratchpad only, not committed) reusing `Casc`/`Encoding`/`open_game`/
+`find_files`/`DB2` from `extract_maps.py` to dump every `UiMapAssignment.db2` row whose `rel` is 1414, 1415, or
+947 — full `vals[]` field list plus `DB2.floats_at(raw, 16, 6)` — and separately dumped every field (not just the
+region) for the same ids, and did the same for `UiMap.db2`.
+
+**Findings:**
+
+1. Confirmed exactly 61 rows total in `UiMapAssignment.db2`; **only `rel=947` has more than one row** (2 rows).
+   1414 and 1415 each still have exactly their one known self-frame row.
+2. Full field layout of `UiMapAssignment.db2` (`fsi`): field0 (2 packed floats, always `0.0,0.0` for every row
+   sampled), field1 (2 packed floats, always `1.0,1.0`), field2 = the known 6-float region blob, field3
+   (incrementing per-row id, e.g. 46724/46725 for 1414/1415, 46784/46785 for the two 947 rows — just row
+   insertion order, not a reference), field4 (duplicates the row's own `rel` UiMapID — not independently useful),
+   field5 (always 0, a common-table default — looked like a candidate `AreaID`/`MapID` link but is 0 for every
+   row checked), field6 (palette-backed int; initially looked like a clean 0/1 discriminator matching 1414→1,
+   1415→0 and the two 947 rows→1/0 respectively — **but a full-table dump showed field6's value distribution
+   overall is `{0: 29, 1: 26, 2991: 2, 30: 1, 489: 1, 529: 1, 2997: 1}`**, i.e. it is a generic, mostly-sparse
+   field (almost certainly `AreaID`) that happens to be 0 or 1 for most rows by coincidence, not a real
+   continent-matching key. No field in this table reliably pairs a 947 row to a specific continent.
+3. Decoded regions for the two `rel=947` rows (ignoring the always-`±1000000` Z sentinel):
+   - 947 row A: X `-16000.0 .. 6933.3`, Y `-7466.7 .. 8000.0`
+   - 947 row B: X `-12800.0 .. 12266.7`, Y `-9600.0 .. 6933.3`
+
+   These two boxes **overlap heavily in both X and Y** (common X range roughly `-12800..6933`, common Y range
+   roughly `-7466..6933`) — regardless of which row is assigned to which continent, swapping the labels cannot
+   fix this, since overlap is a property of the two boxes themselves. A correct "where does each continent sit
+   in the combined Azeroth canvas" pair of rects should **not** overlap (continents 1414/1415 don't overlap in
+   reality). This fails the sanity check the task set out to apply, so these two rows are not "one placement rect
+   per continent" — more likely two unrelated sub-regions of the Azeroth world node (e.g. two different
+   zoom/viewport presets), not geography.
+4. Cross-checked `UiMap.db2` itself for a hidden offset/scale/placement field (in case the transform lives there
+   instead of in `UiMapAssignment`): its record is only 8 bytes (64 bits) per row, and every field beyond
+   `id`/`ownUiMapID`/`ParentUiMapID`/`Flags`/`Type` is a common-table default of 0 for 947/1414/1415. No
+   placement data lives there either.
+5. Also checked `UiMapXMapArt.db2` (FDID 1957217, used elsewhere for overlay art lookup) for 947/1414/1415: it is
+   a 2-field table, `{ownUiMapID -> ArtID}` only (`947->2141`, `1414->2142`, `1415->2140`). No width/height/offset
+   fields live here either — that data (when present) lives in `WorldMapOverlay`/`WorldMapOverlayTile`, which are
+   per-zone exploration-overlay tables, not continent-placement tables.
+6. As an additional sanity check on the task's own stated premise (that Kalimdor's and Eastern Kingdoms' self
+   frames are in genuinely different local coordinate systems, not a shared world frame): their self-frame boxes
+   are `1414: X -11733.3..12799.9, Y -19733.2..17066.6` and `1415: X -16000.0..7466.6, Y -19199.9..16000.0`. These
+   two boxes also overlap almost completely and EK's range nests almost entirely inside Kalimdor's range. Treating
+   them as already-shared coordinates (i.e. skipping 947 entirely and just taking the union of the two self-frame
+   boxes) would place Eastern Kingdoms *inside* Kalimdor's footprint rather than beside it — confirming the task's
+   premise that the two self frames are **not** directly combinable, and ruling out that shortcut too.
+
+**Conclusion: no confirmed, non-guessed disambiguation exists in this build's `UiMap.db2` / `UiMapAssignment.db2`
+/ `UiMapXMapArt.db2` for "where does continent X sit inside the Azeroth (947) world canvas."** Per the task's own
+stop condition, the composite was **not built** — doing so would require guessing an axis/offset/scale with no
+real data backing it, which is exactly what was to be avoided.
+
+Plan B (use the pre-extracted `maps/Azeroth.png`, confirmed to already exist locally, 1002x668, produced by the
+normal `extract_maps.py` zone pipeline via the `("Azeroth","Azeroth")` `ZONES` entry; sampled pixels at several
+points are non-blank, so it likely is Blizzard's own pre-composed world image) does not escape this problem
+either: placing the 46 zones onto that image correctly still requires each zone's rect in 947's own pixel space,
+i.e. the exact same unresolved continent-in-947 placement transform. So Plan B was not attempted either — it
+would need the identical missing data.
+
+**Recommendation for a future session:** the only way forward without guessing is either (a) find a different
+source for the continent-in-world placement rects — e.g. a newer/non-Classic build's `UiMapAssignment.db2` may
+carry extra rows per continent with a real usable key (this WoW Forever/Classic-era build's table is small, 61
+rows, and may simply not carry the modern retail client's full placement data), or (b) accept a *visual-only*,
+explicitly-labeled hand-calibrated offset (not derived from game data, and documented as such) if the product
+decision is that an approximate combined map is acceptable. Neither was done here since both require either new
+data or an explicit, acknowledged guess, and the task asked to stop rather than force either.
+
+No files were changed by this session: `extract_maps.py`, `maps/world/index.json`, and `maps/world/*.png` are
+untouched. Only this notes file was appended to.
+
+## 2026-11-12 (follow-up) — re-examined the UiMap tree itself, then checked for a legacy Lua placement; neither yields a usable combined-world rect
+
+Task: before accepting the prior session's conclusion, re-verify from scratch that uiMapID 947 really is the only/
+nearest COSMIC- or WORLD-type ancestor of both continents (rather than trusting that assumption), and if so, fall
+back to searching the client's own WorldMapFrame Lua/XML for a hardcoded legacy placement.
+
+**Part 1 — full UiMap.db2 dump + full parent-chain walk (CONFIRMED, this session, independently re-derived).**
+
+Wrote a throwaway script (scratchpad only, not committed) reusing `open_game`/`find_files`/`DB2` from
+`extract_maps.py` to dump every row of `UiMap.db2` (FDID 1957206) as `(id, parent, type)` and to walk 1414's and
+1415's full parent chains to the root (not stopping at the first CONTINENT ancestor).
+
+- Dumped all 60 rows. **Exactly one row has `type` 0 or 1**: `id=947, parent=0, type=1 (WORLD)`. No `type=0`
+  (COSMIC) row exists anywhere in this table at all.
+- Full parent chain for 1414 (Kalimdor): `1414 -> parent 947 (type=2 CONTINENT) -> parent 947 is type=1 (WORLD),
+  parent 0 -> 0 is the "no parent" sentinel, not a real node`.
+- Full parent chain for 1415 (Eastern Kingdoms): identical shape, `1415 -> 947 -> 0`.
+- Common ancestors of 1414 and 1415: `{947, 0}` — and `0` is not a real UiMap row (it's the terminator value used
+  when `ParentUiMapID` is unset), so **947 is genuinely the only real common ancestor**. There is no sibling
+  COSMIC/WORLD node anywhere in this table, and no alternate path.
+- Re-dumped 947's own row plainly, making no assumption: `947 -> parent=0, type=1 (WORLD)`. The original premise
+  ("947 is WORLD-type, parent of both continents") is **confirmed correct, not a mistake** — the problem was never
+  947's identity, it's that its two `UiMapAssignment` rows don't decode into a valid non-overlapping placement
+  pair (re-confirmed below, same floats as the prior session got).
+- For completeness, re-pulled the two `rel=947` `UiMapAssignment` rows in this session and got byte-for-byte the
+  same floats as the prior session's writeup: row A `X -16000.0..6933.3, Y -7466.7..8000.0`; row B
+  `X -12800.0..12266.7, Y -9600.0..6933.3`. Still heavily overlapping, still not a usable per-continent placement
+  pair. Also confirmed: no OTHER id in the common-ancestor set (`{947, 0}`) has any `UiMapAssignment` row besides
+  947's own two (0 isn't a real id, so there's nothing to look up for it).
+
+**Conclusion for Part 1: no new path found. The prior session's conclusion stands, independently re-derived from
+scratch in this session rather than trusted on faith.** 947 is confirmed the sole WORLD-type ancestor of both
+continents; there is no distinct COSMIC/WORLD node or sibling path to check instead; and 947's own
+`UiMapAssignment` data still doesn't yield a non-overlapping placement pair for Kalimdor vs. Eastern Kingdoms.
+
+**Part 2 — searched for a legacy Lua/XML WorldMapFrame placement (performed, since Part 1 found nothing).**
+
+Built a `wanted` dict of path-name hashes (reusing `name_hash`/`find_files` exactly as `extract_maps.py` already
+does for `.blp` art paths) for several candidate legacy/modern WorldMap file paths and looked them up in this
+build's root via `find_files(root, wanted, {})`.
+
+- Found (3 of 7 candidates): `Interface\AddOns\Blizzard_WorldMap\Blizzard_WorldMap.lua` (54,005 bytes),
+  `Interface\AddOns\Blizzard_WorldMap\Blizzard_WorldMap.xml` (5,034 bytes), and
+  `Interface\AddOns\Blizzard_MapCanvas\Blizzard_MapCanvas.lua` (40,930 bytes). All three were present locally (no
+  CDN fetch needed) and decoded cleanly via the normal `Fetcher.get` -> `blte_decode` path.
+- Not found: `Blizzard_WorldMap.toc`, `Interface\FrameXML\WorldMapFrame.lua`, `Interface\FrameXML\WorldMapFrame.xml`,
+  `Blizzard_WorldMap_PingFrame.lua` — consistent with this being the modern map-canvas-based client (no legacy
+  FrameXML world map exists in this build at all).
+- Searched the three found files' decoded text for `Kalimdor`, `Eastern Kingdoms`, `Azeroth`, `CONTINENT`,
+  `SetTexCoord`, and the literal `947` (947 checked specifically since that's the WORLD-type uiMapID in question).
+  **Zero matches for any of these in any of the three files.** Spot-read the first ~60 lines of
+  `Blizzard_WorldMap.lua` to sanity-check the file is genuine, readable Lua and not binary/garbled — it is: normal
+  frame-mixin code (`WorldMapMixin`, `SetupTitle`, `Minimize`/`Maximize`, gamepad nav-bar handling), entirely
+  generic UI plumbing with no map-specific geography or ids hardcoded anywhere in it.
+
+**Conclusion for Part 2: no legacy or hardcoded continent-placement data exists in this client's Lua/XML either.**
+This build's world map implementation is fully data-driven through `C_Map`/the `UiMap`+`UiMapAssignment` DB2
+tables this session already dumped — there is no fallback hardcoded rect to recover.
+
+**Overall assessment (confidence-labeled):**
+
+- **Confident/re-verified independently:** 947 is the one and only WORLD-type UiMap node in this build, and the
+  sole common ancestor of 1414/1415; its two `UiMapAssignment` rows are real, correctly-decoded floats, and they
+  do overlap (this is a property of the data itself, not a labeling mix-up). The WorldMap addon's Lua/XML contains
+  no hardcoded placement data of any kind for 947, 1414, or 1415.
+- **Not found despite two independent search strategies:** any game-data-backed answer to "where does Kalimdor
+  sit relative to Eastern Kingdoms on a combined canvas." Both the UiMap-table path (Part 1, this session's
+  re-derivation + the prior session's deeper table-by-table audit) and the client-code path (Part 2) are now
+  exhausted for this build.
+- **Still true, unchanged from the prior session's recommendation:** proceeding requires either (a) a different
+  build's `UiMapAssignment.db2` with richer per-continent placement rows (untested — this WoW Forever/Classic-era
+  build only has 61 rows total), or (b) an explicitly-labeled, hand-calibrated visual approximation, acknowledged
+  as not derived from game data. This session did not attempt either, consistent with the task's stop condition.
+
+No files were changed by this session besides this notes file: `extract_maps.py`, `maps/world/index.json`, and
+`maps/world/*.png` remain untouched.
+
+## 2026-11-12 (later) — built the approximate composite (product decision: ship it, clearly labeled)
+
+Per the product decision recorded above ("accept a visual-only, explicitly-labeled hand-calibrated offset if the
+product decision is that an approximate combined map is acceptable"), `extract_maps.py --world` now emits a
+single combined `maps/world/World.png` (2400x698) with both continents' 46 zones remapped into it, instead of the
+two separate continent canvases. The two continents' SIZE relative to each other is real data (the ratio between
+their own `UiMapAssignment` self-frame world-yard boxes - Kalimdor ended up ~4.55% larger than Eastern Kingdoms in
+the composite); the GAP between them (350px, Kalimdor left / Eastern Kingdoms right) is a hand-chosen visual
+approximation, not derived from game data, exactly as this file documents above. The output JSON records this via
+top-level `"placement": "approximate"` and `"note"` fields so nothing later mistakes the layout for game-data-
+derived. The old `maps/world/Kalimdor.png` / `EasternKingdoms.png` were deleted as part of this change.
+
+## 2026-11-12 (follow-up 2) — EasternKingdoms art bug found, then World.png replaced with a real screenshot
+Separately from the placement question: `Interface\WorldMap\EasternKingdoms\` in this build does NOT hold real
+terrain art - opening the extracted `maps\EasternKingdoms.png` showed only decorative UI border/frame chrome, not
+a landmass (confirmed visually, not just by the "non-transparent pixel" sanity check used earlier, which passed
+by coincidence since the chrome is a similar brown/tan colour to real terrain). The real Eastern Kingdoms terrain
+ships under the OLD pre-"two continents" lore name "Azeroth" instead (`Interface\WorldMap\Azeroth\`, uiMapID 947's
+own art) - `maps\Azeroth.png` already correctly shows the labeled "EASTERN KINGDOMS" landmass. Fixed two places:
+`maps\index.json`'s `"easternkingdoms"` entry now points its `"file"` at `Azeroth.png`; `extract_maps.py` gained
+a `CONTINENT_ART_OVERRIDE = {"Eastern Kingdoms": "Azeroth"}` so `--world` mode reads the correct source too. This
+is a real, confirmed bug fix, independent of the placement-approximation question above.
+
+After re-running `--world --force` with that fix, the user supplied a real screenshot of the client's own in-game
+combined-continent WorldMapFrame view (both continents drawn together on one sheet, with UI chrome: title text,
+a coordinate readout, menu/help buttons, flight-point icons, and a player position arrow). At the user's request,
+that screenshot was hand-cleaned (UI chrome removed/inpainted via clone-patch + feathered blending, done directly
+in-session with PIL, not generated by `extract_maps.py`) and now IS `maps\world\World.png` (837x556), replacing
+the synthetic two-panel composite entirely. This means the background art's continent SIZE/SHAPE/RELATIVE
+POSITION is now 100% authentic Blizzard art (real screenshot), not synthetic - strictly better than the composite.
+Zone marker positions are still an approximation (no game data places them against this specific screenshot
+either): each zone's already-correct fractional position within its own continent's native 1002x668 extracted
+frame was remapped onto a HAND-ESTIMATED landmass bounding box within the screenshot (Kalimdor ~(70,40,260,450),
+Eastern Kingdoms ~(545,40,230,450) in the 837x556 image), verified by plotting all 46 markers and visually
+confirming every one lands on its correct landmass in a plausible relative position. Recorded in index.json's
+`"note"` field. See the WARNING comment above `extract_world()` in `extract_maps.py`: re-running `--world --force`
+would silently overwrite this hand-prepared World.png with the inferior synthetic one - back it up first.
+
+## 2026-11-12 (follow-up 3) — World.png replaced again, now with wowforeveratlas.com's atlas image
+The user supplied a direct URL to a clean, pre-made combined-continent map:
+https://wowforeveratlas.com/media/forever-maps/azeroth.webp (1002x668, no UI chrome at all - a purpose-built
+atlas image, not a client screenshot, so no cleanup/inpainting was needed this time). This REPLACES the
+hand-cleaned-screenshot version from follow-up 2 as `maps\world\World.png`. Zone placement uses the same method
+as before (each zone's known fractional position within its own continent's native 1002x668 extracted frame,
+remapped onto a hand-estimated landmass bounding box within this new image - Kalimdor ~(95,70,270,495), Eastern
+Kingdoms ~(655,55,265,510)), re-verified by plotting all 46 markers; all land correctly on their landmass.
+`index.json`'s `"note"` field updated to credit the real source and describe the approximation. Still subject to
+the WARNING above `extract_world()` in `extract_maps.py`: `--world --force` would overwrite this with the
+inferior synthetic composite.

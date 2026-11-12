@@ -1,390 +1,383 @@
 {
  "continents": [
   {
-   "id": "kalimdor",
-   "name": "Kalimdor",
-   "file": "Kalimdor.png",
+   "id": "azeroth",
+   "name": "Azeroth",
+   "file": "World.png",
    "w": 1002,
    "h": 668,
    "zones": [
     {
      "mapId": 1411,
      "name": "Durotar",
-     "x": 518,
-     "y": 299,
-     "w": 144,
-     "h": 96
+     "x": 235,
+     "y": 292,
+     "w": 39,
+     "h": 71
     },
     {
      "mapId": 1412,
      "name": "Mulgore",
-     "x": 397,
-     "y": 341,
-     "w": 168,
-     "h": 112
+     "x": 202,
+     "y": 323,
+     "w": 45,
+     "h": 83
     },
     {
      "mapId": 1413,
      "name": "The Barrens",
-     "x": 393,
-     "y": 305,
-     "w": 276,
-     "h": 184
+     "x": 201,
+     "y": 296,
+     "w": 74,
+     "h": 136
     },
-    {
-     "mapId": 1438,
-     "name": "Teldrassil",
-     "x": 361,
-     "y": 26,
-     "w": 139,
-     "h": 92
-    },
-    {
-     "mapId": 1439,
-     "name": "Darkshore",
-     "x": 385,
-     "y": 122,
-     "w": 178,
-     "h": 119
-    },
-    {
-     "mapId": 1440,
-     "name": "Ashenvale",
-     "x": 418,
-     "y": 221,
-     "w": 157,
-     "h": 105
-    },
-    {
-     "mapId": 1441,
-     "name": "Thousand Needles",
-     "x": 476,
-     "y": 457,
-     "w": 120,
-     "h": 80
-    },
-    {
-     "mapId": 1442,
-     "name": "Stonetalon Mountains",
-     "x": 376,
-     "y": 269,
-     "w": 133,
-     "h": 89
-    },
-    {
-     "mapId": 1443,
-     "name": "Desolace",
-     "x": 349,
-     "y": 336,
-     "w": 122,
-     "h": 82
-    },
-    {
-     "mapId": 1444,
-     "name": "Feralas",
-     "x": 317,
-     "y": 413,
-     "w": 189,
-     "h": 126
-    },
-    {
-     "mapId": 1445,
-     "name": "Dustwallow Marsh",
-     "x": 491,
-     "y": 404,
-     "w": 143,
-     "h": 95
-    },
-    {
-     "mapId": 1446,
-     "name": "Tanaris",
-     "x": 471,
-     "y": 508,
-     "w": 188,
-     "h": 125
-    },
-    {
-     "mapId": 1447,
-     "name": "Azshara",
-     "x": 554,
-     "y": 203,
-     "w": 138,
-     "h": 92
-    },
-    {
-     "mapId": 1448,
-     "name": "Felwood",
-     "x": 420,
-     "y": 154,
-     "w": 157,
-     "h": 104
-    },
-    {
-     "mapId": 1449,
-     "name": "Un'Goro Crater",
-     "x": 450,
-     "y": 511,
-     "w": 101,
-     "h": 67
-    },
-    {
-     "mapId": 1450,
-     "name": "Moonglade",
-     "x": 502,
-     "y": 117,
-     "w": 63,
-     "h": 42
-    },
-    {
-     "mapId": 1451,
-     "name": "Silithus",
-     "x": 396,
-     "y": 511,
-     "w": 95,
-     "h": 63
-    },
-    {
-     "mapId": 1452,
-     "name": "Winterspring",
-     "x": 473,
-     "y": 116,
-     "w": 193,
-     "h": 129
-    },
-    {
-     "mapId": 1454,
-     "name": "Orgrimmar",
-     "x": 565,
-     "y": 287,
-     "w": 38,
-     "h": 25
-    },
-    {
-     "mapId": 1456,
-     "name": "Thunder Bluff",
-     "x": 451,
-     "y": 372,
-     "w": 28,
-     "h": 19
-    },
-    {
-     "mapId": 1457,
-     "name": "Darnassus",
-     "x": 385,
-     "y": 70,
-     "w": 29,
-     "h": 19
-    }
-   ]
-  },
-  {
-   "id": "easternkingdoms",
-   "name": "Eastern Kingdoms",
-   "file": "EasternKingdoms.png",
-   "w": 1002,
-   "h": 668,
-   "zones": [
     {
      "mapId": 1416,
      "name": "Alterac Mountains",
-     "x": 433,
-     "y": 170,
-     "w": 80,
-     "h": 53
+     "x": 770,
+     "y": 185,
+     "w": 21,
+     "h": 40
     },
     {
      "mapId": 1417,
      "name": "Arathi Highlands",
-     "x": 480,
-     "y": 216,
-     "w": 102,
-     "h": 68
+     "x": 782,
+     "y": 220,
+     "w": 27,
+     "h": 52
     },
     {
      "mapId": 1418,
      "name": "Badlands",
-     "x": 515,
-     "y": 380,
-     "w": 71,
-     "h": 47
+     "x": 791,
+     "y": 345,
+     "w": 19,
+     "h": 36
     },
     {
      "mapId": 1419,
      "name": "Blasted Lands",
-     "x": 491,
-     "y": 513,
-     "w": 95,
-     "h": 64
+     "x": 785,
+     "y": 447,
+     "w": 25,
+     "h": 49
     },
     {
      "mapId": 1420,
      "name": "Tirisfal Glades",
-     "x": 369,
-     "y": 103,
-     "w": 129,
-     "h": 86
+     "x": 753,
+     "y": 134,
+     "w": 34,
+     "h": 66
     },
     {
      "mapId": 1421,
      "name": "Silverpine Forest",
-     "x": 357,
-     "y": 165,
-     "w": 120,
-     "h": 80
+     "x": 749,
+     "y": 181,
+     "w": 32,
+     "h": 61
     },
     {
      "mapId": 1422,
      "name": "Western Plaguelands",
-     "x": 444,
-     "y": 117,
-     "w": 122,
-     "h": 82
+     "x": 772,
+     "y": 144,
+     "w": 32,
+     "h": 63
     },
     {
      "mapId": 1423,
      "name": "Eastern Plaguelands",
-     "x": 520,
-     "y": 107,
-     "w": 122,
-     "h": 82
+     "x": 793,
+     "y": 137,
+     "w": 32,
+     "h": 63
     },
     {
      "mapId": 1424,
      "name": "Hillsbrad Foothills",
-     "x": 425,
-     "y": 201,
-     "w": 91,
-     "h": 61
+     "x": 767,
+     "y": 208,
+     "w": 24,
+     "h": 47
     },
     {
      "mapId": 1425,
      "name": "The Hinterlands",
-     "x": 500,
-     "y": 171,
-     "w": 110,
-     "h": 73
+     "x": 787,
+     "y": 186,
+     "w": 29,
+     "h": 56
     },
     {
      "mapId": 1426,
      "name": "Dun Morogh",
-     "x": 404,
-     "y": 323,
-     "w": 140,
-     "h": 93
+     "x": 762,
+     "y": 302,
+     "w": 37,
+     "h": 71
     },
     {
      "mapId": 1427,
      "name": "Searing Gorge",
-     "x": 465,
-     "y": 386,
-     "w": 64,
-     "h": 42
+     "x": 778,
+     "y": 350,
+     "w": 17,
+     "h": 32
     },
     {
      "mapId": 1428,
      "name": "Burning Steppes",
-     "x": 463,
-     "y": 413,
-     "w": 83,
-     "h": 56
+     "x": 777,
+     "y": 370,
+     "w": 22,
+     "h": 43
     },
     {
      "mapId": 1429,
      "name": "Elwynn Forest",
-     "x": 412,
-     "y": 439,
-     "w": 99,
-     "h": 66
+     "x": 764,
+     "y": 390,
+     "w": 26,
+     "h": 50
     },
     {
      "mapId": 1430,
      "name": "Deadwind Pass",
-     "x": 479,
-     "y": 493,
-     "w": 71,
-     "h": 47
+     "x": 782,
+     "y": 431,
+     "w": 19,
+     "h": 36
     },
     {
      "mapId": 1431,
      "name": "Duskwood",
-     "x": 432,
-     "y": 489,
-     "w": 77,
-     "h": 51
+     "x": 769,
+     "y": 428,
+     "w": 20,
+     "h": 39
     },
     {
      "mapId": 1432,
      "name": "Loch Modan",
-     "x": 512,
-     "y": 340,
-     "w": 79,
-     "h": 52
+     "x": 790,
+     "y": 315,
+     "w": 21,
+     "h": 40
     },
     {
      "mapId": 1433,
      "name": "Redridge Mountains",
-     "x": 503,
-     "y": 457,
-     "w": 62,
-     "h": 41
+     "x": 788,
+     "y": 404,
+     "w": 16,
+     "h": 31
     },
     {
      "mapId": 1434,
      "name": "Stranglethorn Vale",
-     "x": 392,
-     "y": 530,
-     "w": 182,
-     "h": 121
+     "x": 759,
+     "y": 460,
+     "w": 48,
+     "h": 92
     },
     {
      "mapId": 1435,
      "name": "Swamp of Sorrows",
-     "x": 519,
-     "y": 486,
-     "w": 65,
-     "h": 44
+     "x": 792,
+     "y": 426,
+     "w": 17,
+     "h": 34
     },
     {
      "mapId": 1436,
      "name": "Westfall",
-     "x": 370,
-     "y": 480,
-     "w": 100,
-     "h": 66
+     "x": 753,
+     "y": 421,
+     "w": 26,
+     "h": 50
     },
     {
      "mapId": 1437,
      "name": "Wetlands",
-     "x": 467,
-     "y": 274,
-     "w": 118,
+     "x": 779,
+     "y": 264,
+     "w": 31,
+     "h": 60
+    },
+    {
+     "mapId": 1438,
+     "name": "Teldrassil",
+     "x": 192,
+     "y": 89,
+     "w": 37,
+     "h": 68
+    },
+    {
+     "mapId": 1439,
+     "name": "Darkshore",
+     "x": 199,
+     "y": 160,
+     "w": 48,
+     "h": 88
+    },
+    {
+     "mapId": 1440,
+     "name": "Ashenvale",
+     "x": 208,
+     "y": 234,
+     "w": 42,
      "h": 78
+    },
+    {
+     "mapId": 1441,
+     "name": "Thousand Needles",
+     "x": 223,
+     "y": 409,
+     "w": 32,
+     "h": 59
+    },
+    {
+     "mapId": 1442,
+     "name": "Stonetalon Mountains",
+     "x": 196,
+     "y": 269,
+     "w": 36,
+     "h": 66
+    },
+    {
+     "mapId": 1443,
+     "name": "Desolace",
+     "x": 189,
+     "y": 319,
+     "w": 33,
+     "h": 61
+    },
+    {
+     "mapId": 1444,
+     "name": "Feralas",
+     "x": 180,
+     "y": 376,
+     "w": 51,
+     "h": 93
+    },
+    {
+     "mapId": 1445,
+     "name": "Dustwallow Marsh",
+     "x": 227,
+     "y": 369,
+     "w": 39,
+     "h": 70
+    },
+    {
+     "mapId": 1446,
+     "name": "Tanaris",
+     "x": 222,
+     "y": 446,
+     "w": 51,
+     "h": 93
+    },
+    {
+     "mapId": 1447,
+     "name": "Azshara",
+     "x": 244,
+     "y": 220,
+     "w": 37,
+     "h": 68
+    },
+    {
+     "mapId": 1448,
+     "name": "Felwood",
+     "x": 208,
+     "y": 184,
+     "w": 42,
+     "h": 77
+    },
+    {
+     "mapId": 1449,
+     "name": "Un'Goro Crater",
+     "x": 216,
+     "y": 449,
+     "w": 27,
+     "h": 50
+    },
+    {
+     "mapId": 1450,
+     "name": "Moonglade",
+     "x": 230,
+     "y": 157,
+     "w": 17,
+     "h": 31
+    },
+    {
+     "mapId": 1451,
+     "name": "Silithus",
+     "x": 202,
+     "y": 449,
+     "w": 26,
+     "h": 47
+    },
+    {
+     "mapId": 1452,
+     "name": "Winterspring",
+     "x": 222,
+     "y": 156,
+     "w": 52,
+     "h": 96
     },
     {
      "mapId": 1453,
      "name": "Stormwind City",
-     "x": 406,
-     "y": 440,
-     "w": 49,
-     "h": 33
+     "x": 762,
+     "y": 391,
+     "w": 13,
+     "h": 25
+    },
+    {
+     "mapId": 1454,
+     "name": "Orgrimmar",
+     "x": 247,
+     "y": 283,
+     "w": 10,
+     "h": 19
     },
     {
      "mapId": 1455,
      "name": "Ironforge",
-     "x": 476,
-     "y": 343,
-     "w": 23,
-     "h": 15
+     "x": 781,
+     "y": 317,
+     "w": 6,
+     "h": 11
+    },
+    {
+     "mapId": 1456,
+     "name": "Thunder Bluff",
+     "x": 217,
+     "y": 346,
+     "w": 8,
+     "h": 14
+    },
+    {
+     "mapId": 1457,
+     "name": "Darnassus",
+     "x": 199,
+     "y": 122,
+     "w": 8,
+     "h": 14
     },
     {
      "mapId": 1458,
      "name": "Undercity",
-     "x": 431,
-     "y": 159,
-     "w": 27,
-     "h": 18
+     "x": 769,
+     "y": 176,
+     "w": 7,
+     "h": 14
     }
    ]
   }
- ]
+ ],
+ "placement": "approximate",
+ "note": "The background image (World.png) is a clean, pre-made combined Kalimdor/Eastern Kingdoms world map from https://wowforeveratlas.com/media/forever-maps/azeroth.webp (no UI chrome to remove - it's a purpose-built atlas image, not a client screenshot). The two landmasses' size, shape and relative position are authentic WoW Forever cartography. Zone marker POSITIONS within this image are still an approximation: no game-data table in this build places individual zones relative to this specific combined view (see docs/plans/world-map-notes.md), so each zone's already-correct fractional position within its own continent's native extracted frame (real UiMapAssignment data) was remapped onto a hand-estimated bounding box for that continent's landmass within this image. Verified by plotting all 46 markers and confirming each lands on its correct landmass in a plausible relative position."
 }

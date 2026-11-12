@@ -102,6 +102,38 @@ UIMAP_TYPE_CONTINENT = 2
 # matching ZONES folder, so the already-extracted continent PNG can be reused as-is.
 CONTINENTS = {1414: "Kalimdor", 1415: "Eastern Kingdoms"}
 
+# This build's Interface\WorldMap\EasternKingdoms\ art folder does NOT hold real terrain (confirmed
+# visually: it is decorative UI border/frame chrome, not a landmass). The real Eastern Kingdoms
+# terrain ships under the old pre-"two continents" lore name "Azeroth" instead (Interface\WorldMap\
+# Azeroth\, uiMapID 947's own art) - confirmed by opening maps\Azeroth.png, which shows the correct
+# labeled "EASTERN KINGDOMS" landmass. CONTINENT_ART_OVERRIDE redirects which already-extracted PNG
+# a continent's art is read from, for cases like this where the ZONES-folder-name assumption doesn't
+# hold in this particular build. Affects --world mode AND maps/index.json's "easternkingdoms" entry
+# (both were fixed to point at Azeroth.png - see also the one-line fix noted near the index.json file).
+CONTINENT_ART_OVERRIDE = {"Eastern Kingdoms": "Azeroth"}
+
+# ---- world composite (--world mode) ----
+# No real game data places Kalimdor and Eastern Kingdoms relative to each other - confirmed by two
+# sessions of discovery against both the DB2 tables and the client's own Lua UI code; see the two
+# dated sections at the bottom of docs/plans/world-map-notes.md. What IS real data is each
+# continent's own UiMapAssignment self-frame box (the same box already used above to place that
+# continent's own zones) - the RATIO between the two continents' real world-yard extents, so the
+# composite below sizes Kalimdor and Eastern Kingdoms correctly relative to each other. The actual
+# GAP between the two landmasses in the composite is a hand-chosen visual approximation, not derived
+# from game data - this is recorded in the output JSON's "placement"/"note" fields so nothing reads
+# this file later and mistakes the layout for game-data-derived.
+WORLD_REF_CID = 1415          # Eastern Kingdoms kept at its native extracted pixel resolution;
+                               # Kalimdor is resized relative to it (see continent_yard_scale below)
+WORLD_GAP_PX = 350             # hand-chosen approximate ocean gap between the two landmasses, in
+                               # pixels of the final composite (not derived from game data)
+WORLD_PLACEMENT_NOTE = (
+    "Kalimdor and Eastern Kingdoms are sized correctly relative to each other, derived from the "
+    "ratio between their own UiMapAssignment self-frame world-yard extents (real game data). The "
+    "gap/offset placing them side by side is a hand-chosen visual approximation, NOT derived from "
+    "game data - no real game data places these two continents relative to each other (see "
+    "docs/plans/world-map-notes.md, dated sections at the bottom)."
+)
+
 
 def norm(name):
     return "".join(ch for ch in name.lower() if ch.isalnum())
@@ -570,6 +602,15 @@ def zone_rect_px(zbox, cbox, w, h):
     return round(x0), round(y0), round(x1 - x0), round(y1 - y0)
 
 
+def continent_yard_scale(cbox, w, h):
+    """Pixels-per-world-yard of a continent's own extracted image, from its self-frame box and its
+    own native pixel size. Same axis mapping as world_to_px: pixel width w maps to the box's Y-range,
+    pixel height h maps to the box's X-range. Used only to size two continents correctly relative to
+    each other in the --world composite (real data); never used to derive their relative position."""
+    cminx, cminy, cmaxx, cmaxy = cbox
+    return w / (cmaxy - cminy)
+
+
 def reveal(base, overlays, raw_of):
     """Paint the exploration overlays onto the base map. raw_of: {file id: BLP bytes}."""
     from PIL import Image
@@ -688,7 +729,15 @@ def open_game(args, data_dir):
 def extract_world(args):
     """--world mode: place this script's known UIMAP zones inside their continent's already-extracted
     image (maps\\<Continent>.png), using UiMap.db2 + UiMapAssignment.db2 for the zone/continent tree
-    and each node's world-space region box. Writes maps\\world\\<Continent>.png + world\\index.json."""
+    and each node's world-space region box. Writes maps\\world\\<Continent>.png + world\\index.json.
+
+    WARNING: maps\\world\\World.png and index.json currently hold a HAND-PREPARED result (the real
+    in-game combined-continent screenshot, UI chrome manually removed, zone markers remapped onto it -
+    see world-map-notes.md and index.json's own "note" field). That is strictly better art than what
+    this function builds (a synthetic Kalimdor+Eastern-Kingdoms composite - see the CONTINENTS/
+    WORLD_REF_CID/WORLD_GAP_PX block above). Re-running `--world --force` OVERWRITES the hand-prepared
+    files with the inferior synthetic ones. Back up maps\\world\\World.png and index.json first if you
+    ever need to re-run this, or skip --world entirely until a better automated source is found."""
     data_dir = args.data_dir or os.path.join(args.wow, "Data")
     world_dir = os.path.join(args.out, "world")
     os.makedirs(world_dir, exist_ok=True)
@@ -711,11 +760,14 @@ def extract_world(args):
     regions = uimap_regions(raw["uimapassign"])
     folder_of = {name: folder for name, folder in ZONES}
 
-    continents_out = []
-    placed, skipped = 0, []
+    from PIL import Image
+
+    # Pass 1: for each continent, load its already-extracted image and place its own zones inside
+    # it (exactly as before - this per-continent math is unchanged and known-good).
+    per_continent, placed, skipped = {}, 0, []
     for cid, cname in CONTINENTS.items():
         cbox = regions.get(cid)
-        folder = folder_of.get(cname)
+        folder = CONTINENT_ART_OVERRIDE.get(cname) or folder_of.get(cname)
         if cbox is None or not folder:
             print("  skip continent %-16s (no region box or no known art folder)" % cname)
             continue
@@ -724,9 +776,9 @@ def extract_world(args):
             print("  skip continent %-16s (%s not extracted yet - run extract_maps.py without --world first)"
                   % (cname, png_path))
             continue
-        from PIL import Image
         with Image.open(png_path) as im:
-            w, h = im.size
+            img = im.convert("RGBA")
+        w, h = img.size
 
         zones_out = []
         for zname, uid in UIMAP.items():
@@ -739,17 +791,71 @@ def extract_world(args):
             x, y, zw, zh = zone_rect_px(zbox, cbox, w, h)
             zones_out.append({"mapId": uid, "name": zname, "x": x, "y": y, "w": zw, "h": zh})
             placed += 1
-        zones_out.sort(key=lambda z: z["mapId"])
 
-        dest_name = folder + ".png"
-        with Image.open(png_path) as im:
-            im.save(os.path.join(world_dir, dest_name))
-        continents_out.append({"id": norm(cname), "name": cname, "file": dest_name, "w": w, "h": h,
-                                "zones": zones_out})
-        print("  wrote world\\%s (%dx%d, %d zone(s) placed)" % (dest_name, w, h, len(zones_out)))
+        per_continent[cid] = {"name": cname, "img": img, "w": w, "h": h, "cbox": cbox, "zones": zones_out}
 
-    json.dump({"continents": continents_out}, open(index_path, "w", encoding="utf-8"), indent=1)
-    print("Done: %d continent(s), %d zone(s) placed in %.0fs." % (len(continents_out), placed, time.time() - t0))
+    if len(per_continent) < 2:
+        raise SystemExit("Need both continents extracted to build the combined world map (got %d)"
+                          % len(per_continent))
+
+    # Pass 2: combine into one composite canvas, Kalimdor on the left and Eastern Kingdoms on the
+    # right (matching real WoW geography - EK is the strip of land to the east, across open ocean,
+    # from the rounder Kalimdor landmass). The two continents are resized relative to each other
+    # using the real world-yard ratio (continent_yard_scale, from real UiMapAssignment data); the
+    # reference continent (WORLD_REF_CID) keeps its native extracted pixel size, and the other is
+    # scaled to match. The gap between them is WORLD_GAP_PX, a hand-chosen approximation.
+    ref_scale = continent_yard_scale(per_continent[WORLD_REF_CID]["cbox"],
+                                      per_continent[WORLD_REF_CID]["w"], per_continent[WORLD_REF_CID]["h"])
+    for cid, c in per_continent.items():
+        c["scale_factor"] = ref_scale / continent_yard_scale(c["cbox"], c["w"], c["h"])
+        c["new_w"] = max(1, round(c["w"] * c["scale_factor"]))
+        c["new_h"] = max(1, round(c["h"] * c["scale_factor"]))
+
+    kal, ek = per_continent[1414], per_continent[1415]
+    canvas_h = max(kal["new_h"], ek["new_h"])
+    canvas_w = kal["new_w"] + WORLD_GAP_PX + ek["new_w"]
+    kal["x_off"], kal["y_off"] = 0, (canvas_h - kal["new_h"]) // 2
+    ek["x_off"], ek["y_off"] = kal["new_w"] + WORLD_GAP_PX, (canvas_h - ek["new_h"]) // 2
+
+    canvas = Image.new("RGBA", (canvas_w, canvas_h), (0, 0, 0, 0))
+    all_zones = []
+    for cid, c in per_continent.items():
+        resized = c["img"].resize((c["new_w"], c["new_h"]), Image.LANCZOS)
+        canvas.paste(resized, (c["x_off"], c["y_off"]), resized)
+        f = c["scale_factor"]
+        for z in c["zones"]:
+            all_zones.append({
+                "mapId": z["mapId"], "name": z["name"],
+                "x": round(z["x"] * f) + c["x_off"], "y": round(z["y"] * f) + c["y_off"],
+                "w": round(z["w"] * f), "h": round(z["h"] * f),
+            })
+    all_zones.sort(key=lambda z: z["mapId"])
+
+    world_name = "World.png"
+    canvas.save(os.path.join(world_dir, world_name), optimize=True)
+    # Remove the old per-continent world PNGs this file is replacing, now that nothing in the new
+    # index.json points at them.
+    for stale in ("Kalimdor.png", "EasternKingdoms.png"):
+        stale_path = os.path.join(world_dir, stale)
+        if os.path.exists(stale_path):
+            os.remove(stale_path)
+
+    out = {
+        "continents": [{
+            "id": "azeroth", "name": "Azeroth", "file": world_name,
+            "w": canvas_w, "h": canvas_h,
+            "zones": all_zones,
+        }],
+        # Marks this composite's layout as a hand-chosen visual approximation, not game-data-derived
+        # (see WORLD_PLACEMENT_NOTE above and docs/plans/world-map-notes.md). Other code may ignore
+        # these fields; they exist so a human or this codebase reading the file later knows this.
+        "placement": "approximate",
+        "note": WORLD_PLACEMENT_NOTE,
+    }
+    json.dump(out, open(index_path, "w", encoding="utf-8"), indent=1)
+    print("  wrote world\\%s (%dx%d, Kalimdor x%.4f, Eastern Kingdoms x%.4f, gap %dpx)"
+          % (world_name, canvas_w, canvas_h, kal["scale_factor"], ek["scale_factor"], WORLD_GAP_PX))
+    print("Done: 1 composite continent, %d zone(s) placed in %.0fs." % (placed, time.time() - t0))
     if skipped:
         print("Could not place %d zone(s): %s" % (len(skipped), ", ".join(skipped)))
 
