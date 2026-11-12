@@ -78,3 +78,36 @@ test('demo api honours since, grp and unknown paths', () => {
   assert.equal(demoApi('/api/v1/status', NOW).status, 200);
   assert.equal(demoApi('/api/v1/contacts?q=zzz', NOW).body.total, 0);
 });
+
+test('zooming crops the map image to the visible part, so the map zooms with the dots', () => {
+  const drawn = [];
+  const g = new Proxy({}, { get: (_, k) => (...a) => { if (k === 'drawImage') drawn.push(a); }, set: () => true });
+  const img = { naturalWidth: 1000, naturalHeight: 600 };
+  const size = { w: 900, h: 600 };
+  const paint = (v) => {
+    drawn.length = 0;
+    const scene = buildScene({ state: mkState(), now: NOW, size, view: v, opts: { fixed: true, rangeYd: 300 }, image: { w: 1000, h: 600 } });
+    paintScene(g, scene, size, readColors(null, null), img);
+    return { scene, call: drawn[0] };
+  };
+  const whole = paint({ z: 1, cx: 50, cy: 50 });
+  assert.deepEqual(whole.call.slice(1, 5), [0, 0, 1000, 600], 'unzoomed: the whole image');
+  const zoomed = paint({ z: 2, cx: 25, cy: 25 });
+  assert.deepEqual(zoomed.call.slice(1, 5), [0, 0, 500, 300], 'z=2 at the top-left: the top-left quarter');
+  const panned = paint({ z: 4, cx: 75, cy: 50 });
+  assert.deepEqual(panned.call.slice(1, 5), [625, 225, 250, 150], 'z=4 centred right: a quarter-size crop');
+  const f = zoomed.scene.frame;
+  assert.deepEqual(zoomed.call.slice(5), [f.x, f.y, f.w, f.h], 'the crop always fills the frame');
+});
+
+test('grid lines move with the zoom instead of staying fixed to the frame', () => {
+  const lines = [];
+  const g = new Proxy({}, { get: (_, k) => (...a) => { if (k === 'moveTo') lines.push(a); }, set: () => true });
+  const size = { w: 900, h: 600 };
+  const scene = buildScene({ state: mkState(), now: NOW, size, view: { z: 2, cx: 25, cy: 25 }, opts: { fixed: true, rangeYd: 300 }, image: null });
+  paintScene(g, scene, size, readColors(null, null), null);
+  const xs = lines.map((l) => l[0]).filter((x) => x > scene.frame.x && x < scene.frame.x + scene.frame.w);
+  assert.ok(xs.length > 0 && xs.length < 10, 'only grid lines inside the visible part are drawn');
+  const spacing = scene.frame.w / 5; // 10 percent of the map is 1/5 of the frame at z=2
+  assert.ok(Math.abs(xs[1] - xs[0] - spacing) < 0.01, 'spacing doubled with zoom 2');
+});

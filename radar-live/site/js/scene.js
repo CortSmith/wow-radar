@@ -35,7 +35,7 @@ function projector({ chart, opts, size, view, image, blips, guid }) {
 
 /**
  * state: page state; now: ms; size {w,h} CSS px; view {z,cx,cy}; opts {fixed, rangeYd}; image {w,h} or null.
- * Returns {mapId, chart, fixed, frame, pips, trail}.
+ * Returns {mapId, chart, fixed, frame, view, pips, trail}.
  */
 export function buildScene({ state, now, size, view, opts, image }) {
   const mapId = chooseViewMap(state, now);
@@ -50,5 +50,5 @@ export function buildScene({ state, now, size, view, opts, image }) {
   const trail = state.trail
     .filter((f) => f.mapId === mapId)
     .map((f) => ({ ...f, sx: proj.project(f.x, f.y)[0], sy: proj.project(f.x, f.y)[1] }));
-  return { mapId, chart, fixed: proj.fixed, frame: proj.frame, pips, trail };
+  return { mapId, chart, fixed: proj.fixed, frame: proj.frame, view, pips, trail };
 }

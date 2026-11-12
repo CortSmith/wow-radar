@@ -16,22 +16,55 @@ export function readColors(win, root) {
   return out;
 }
 
-function paintFrame(g, scene, colors, img) {
-  const f = scene.frame;
-  if (img) g.drawImage(img, f.x, f.y, f.w, f.h);
-  g.strokeStyle = colors.line;
-  g.lineWidth = 1;
-  g.strokeRect(f.x, f.y, f.w, f.h);
+const FULL_PCT = 100;
+const UNZOOMED = { z: 1, cx: 50, cy: 50 };
+
+/** The part of the map on screen, in percent of the whole map: [left, top, span]. Same maths as scene.js. */
+function visibleWindow(view) {
+  const span = FULL_PCT / view.z;
+  return { left: view.cx - span / 2, top: view.cy - span / 2, span };
+}
+
+/** Draws only the visible crop of the map image, stretched over the frame, so the map zooms with the dots. */
+function paintMapImage(g, f, view, img) {
+  const w = img.naturalWidth || img.width;
+  const h = img.naturalHeight || img.height;
+  const win = visibleWindow(view);
+  const scale = (value, whole) => (value / FULL_PCT) * whole;
+  g.drawImage(img, scale(win.left, w), scale(win.top, h), scale(win.span, w), scale(win.span, h), f.x, f.y, f.w, f.h);
+}
+
+/** Grid lines every 10 percent of the map; lines outside the visible part are skipped. */
+function paintGrid(g, f, view) {
+  const win = visibleWindow(view);
+  const step = FULL_PCT / GRID_STEPS;
+  const toScreen = (pct, start, size, from) => from + ((pct - start) / win.span) * size;
   g.beginPath();
-  for (let i = 1; i < GRID_STEPS; i++) {
-    g.moveTo(f.x + (f.w * i) / GRID_STEPS, f.y);
-    g.lineTo(f.x + (f.w * i) / GRID_STEPS, f.y + f.h);
-    g.moveTo(f.x, f.y + (f.h * i) / GRID_STEPS);
-    g.lineTo(f.x + f.w, f.y + (f.h * i) / GRID_STEPS);
+  for (let pct = step; pct < FULL_PCT; pct += step) {
+    const x = toScreen(pct, win.left, f.w, f.x);
+    const y = toScreen(pct, win.top, f.h, f.y);
+    if (x > f.x && x < f.x + f.w) {
+      g.moveTo(x, f.y);
+      g.lineTo(x, f.y + f.h);
+    }
+    if (y > f.y && y < f.y + f.h) {
+      g.moveTo(f.x, y);
+      g.lineTo(f.x + f.w, y);
+    }
   }
   g.globalAlpha = 0.35;
   g.stroke();
   g.globalAlpha = 1;
+}
+
+function paintFrame(g, scene, colors, img) {
+  const f = scene.frame;
+  const view = scene.view || UNZOOMED;
+  if (img) paintMapImage(g, f, view, img);
+  g.strokeStyle = colors.line;
+  g.lineWidth = 1;
+  g.strokeRect(f.x, f.y, f.w, f.h);
+  paintGrid(g, f, view);
 }
 
 function paintRings(g, size, colors) {
