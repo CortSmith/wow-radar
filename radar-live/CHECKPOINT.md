@@ -1,6 +1,6 @@
 # radar-live checkpoint (resume here)
 
-Last updated: 2026-11-12, session 3 (end of day).
+Last updated: 2026-11-12, session 4.
 
 ## What this is
 New hosted section of NearbyTracker. `PLAN.md` = master plan, API contract, quality bar. Target host: a weak Xubuntu laptop (static
@@ -157,8 +157,25 @@ of the request should be confirmed with the user before starting (flagged in the
 Remote moved case (`cortsmith` -> `CortSmith`) - pushes still succeed via GitHub's redirect but `git remote set-url` was offered and not
 yet taken.
 
+## DONE (session 4): deploy maps + stable UI (commits 4606f72, 2d379f6, pushed)
+- **Maps by default on the laptop**: `scripts/build.sh`/`build.ps1` now copy the repo's `maps/` folder (incl. `world/`) into `dist/maps`
+  without a flag (`--no-maps`/`-NoMaps` skips; old `--with-maps`/`-WithMaps` are no-ops). `deploy/radar-db.service` defaults
+  `RADAR_MAPS_DIR=/var/lib/radar-live/maps`, so an old `radar.env` still serves maps. dist is ~160 MB now (PNG maps). install.sh /
+  service on real Linux still NEVER run by a human.
+- **Roster is always `scope=all`** (`sector.js rosterSectorOf`): zone, world view, filters are applied client-side (`view-model.js
+  inViewZone`, contact list filters to the picked zone + tracked). Zone/world/filter changes never clear `state.contacts`; `filters`
+  and `worldView` events no longer trigger a sweep (`core.js changed`).
+- **Fixed layout**: `[hidden]{display:none!important}` (the world panel was never really hidden); `#worldWrap` now lives inside `<main>`
+  and shares one slot with `#radarWrap`; history (`#below`) is a bottom overlay; fixed-width selects/buttons/status text; "no map image"
+  note is a radar-area overlay (chart-picker mounts it in `radar`).
+- **Perf**: canvases only resize when the size changes, hidden radar/world skip drawing, radar hover redraws only when the hovered item
+  changes, contact list re-renders on tick only every 15 s.
+- **World map markers** in `maps/world/index.json` re-placed by hand (centre points, small boxes) on the landmasses; still approximate.
+- Tests: 200 node tests + full Go suite green. **UNVERIFIED BY EYE**: the layout/CSS changes were never viewed in a browser; the user
+  should reload the page (after re-deploying dist) and report any remaining shifts, lag or marker misplacement.
+
 ## First thing next session
-1. Commit the uncommitted `#side{margin-left:auto}` sidebar fix in `radar-live/site/style.css` (see above) before anything else.
+1. (Sidebar fix is committed.) Ask the user whether the new layout looks right in the browser.
 2. `gofmt -l .; go vet ./...; go test -count=1 ./... -cover` and `node --test site/test/*.test.js` (expect 200/200) to confirm clean
    baseline, same as every session.
 3. Ask the user: stage 10 armory's API docs URL (still the only thing blocking it and stage 11's U6); whether to pursue the
