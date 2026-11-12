@@ -89,10 +89,13 @@ function initialState(prefs, config) {
     wantTrail: false,
     viewKey: prefs.get(config.VIEW_KEY_STORAGE, '') || '',
     mapImage: null,
-    // Stage 14 W6: pure view-mode flag (world map vs the single-zone radar). Never resets
-    // player/tracked/zone/filters; toggled by features/world-map.js's header-controls button and by
-    // gotoZone (clicking a zone in the world view switches back to zone view automatically).
-    worldView: false,
+    // Stage 14 W6/W7: pure view-mode flag (world map vs the single-zone radar). Never resets
+    // player/tracked/zone/filters; toggled by features/world-map.js's header-controls button, by
+    // gotoZone (clicking a zone in the world view switches back to zone view automatically), and by
+    // setZone itself (W7: "All Zones" - no zone picked - now defaults to the world map; picking any
+    // real zone, from the world map OR the chart-picker dropdown, switches back to zone view; clearing
+    // the zone back to "All Zones" restores the world map default).
+    worldView: true,
   };
   Object.defineProperty(state, 'player', {
     enumerable: true,
@@ -225,6 +228,11 @@ export function createApp(env) {
     onError: (err) => log('sweep failed', err),
   });
 
+  /** Tiny shared helper: sets the raw flag only, no bus emission - setWorldView and setZone each pick their own event. */
+  function applyWorldView(v) {
+    state.worldView = Boolean(v);
+  }
+
   /** Adds/re-focuses one player in state.tracked (moves it to the end = most recent), evicting the oldest past TRACK_MAX. */
   function addTracked(p) {
     const player = { guid: p.guid, name: p.name || '' };
@@ -330,8 +338,17 @@ export function createApp(env) {
       state.trackedData.clear();
       changed('selection');
     },
+    /**
+     * Stage 14 W7: picking a real zone also exits world view; clearing back to "All Zones" (null)
+     * restores it, since the world map is now the default for "no zone picked". Rides along in the
+     * same state update as the zone itself, one changed('selection') emission per call - same
+     * single-emission discipline as before, just with worldView set alongside state.zone rather than
+     * a separate changed('worldView') call (that stays setWorldView's job for the manual toggle).
+     */
     setZone(zone) {
-      state.zone = zone && Number.isFinite(zone.mapId) ? { mapId: zone.mapId, name: zone.name || '' } : null;
+      const real = Boolean(zone && Number.isFinite(zone.mapId));
+      state.zone = real ? { mapId: zone.mapId, name: zone.name || '' } : null;
+      applyWorldView(!real);
       changed('selection');
     },
     setRuleset(rs) {
@@ -350,7 +367,7 @@ export function createApp(env) {
      * applyRosterSectorChange and kick the scheduler, same as every other sector-affecting setter here.
      */
     setWorldView(v) {
-      state.worldView = Boolean(v);
+      applyWorldView(v);
       changed('worldView');
     },
     /** The key lives in memory; it is written to localStorage only when the user ticked "remember". */

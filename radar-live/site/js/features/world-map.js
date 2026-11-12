@@ -65,7 +65,12 @@ function mountToggle(ctx) {
     text: ctx.state.worldView ? ctx.MSG.worldViewOff : ctx.MSG.worldViewOn,
     on: { click: () => ctx.setWorldView(!ctx.state.worldView) },
   });
-  ctx.bus.on('worldView', () => { btn.textContent = ctx.state.worldView ? ctx.MSG.worldViewOff : ctx.MSG.worldViewOn; });
+  const sync = () => { btn.textContent = ctx.state.worldView ? ctx.MSG.worldViewOff : ctx.MSG.worldViewOn; };
+  ctx.bus.on('worldView', sync);
+  // W7: setZone now also flips worldView (picking a real zone exits it, clearing back to "All Zones"
+  // restores it) as part of its own single changed('selection') emission, not a separate 'worldView'
+  // one - so the button label needs to track 'selection' too, not just the manual-toggle event.
+  ctx.bus.on('selection', sync);
   host.appendChild(btn);
 }
 
@@ -82,6 +87,8 @@ function mountVisibility(ctx, worldWrap) {
     worldWrap.hidden = !ctx.state.worldView;
   };
   ctx.bus.on('worldView', sync);
+  // W7: see mountToggle's comment above - a zone pick/clear can flip worldView via 'selection' alone.
+  ctx.bus.on('selection', sync);
   sync();
 }
 

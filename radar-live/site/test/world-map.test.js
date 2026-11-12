@@ -307,29 +307,38 @@ test('W6: ctx.setWorldView toggles state.worldView and emits a worldView bus eve
   const h = await boot({ withWorld: true });
   const seen = [];
   h.app.ctx.bus.on('worldView', () => seen.push(h.app.state.worldView));
-  assert.equal(h.app.state.worldView, false);
-  h.app.ctx.setWorldView(true);
+  // W7: the world map is now the default view (no zone picked yet).
   assert.equal(h.app.state.worldView, true);
   h.app.ctx.setWorldView(false);
-  assert.deepEqual(seen, [true, false]);
+  assert.equal(h.app.state.worldView, false);
+  h.app.ctx.setWorldView(true);
+  assert.deepEqual(seen, [false, true]);
   h.app.stop();
 });
 
-test('W6: the header-controls toggle swaps visibility between the radar and world sections', async () => {
+test('W7: fresh boot with nothing selected defaults to world view, radar hidden', async () => {
   const h = await boot({ withWorld: true });
   const header = h.app.ctx.mount('header-controls');
   const radar = h.app.ctx.mount('radar');
   const world = h.world;
-  const btn = header.find((n) => n.tagName === 'BUTTON' && n.textContent === h.app.ctx.MSG.worldViewOn);
+  const btn = header.find((n) => n.tagName === 'BUTTON' && n.textContent === h.app.ctx.MSG.worldViewOff);
+  assert.ok(btn, 'a toggle button was mounted in header-controls, already reading "turn off"');
+  assert.equal(h.app.state.worldView, true);
+  assert.equal(h.app.state.zone, null);
+  assert.equal(radar.hidden, true);
+  assert.equal(world.hidden, false);
+  h.app.stop();
+});
+
+test('W6: the header-controls toggle overrides world view in either direction', async () => {
+  const h = await boot({ withWorld: true });
+  const header = h.app.ctx.mount('header-controls');
+  const radar = h.app.ctx.mount('radar');
+  const world = h.world;
+  const btn = header.find((n) => n.tagName === 'BUTTON' && n.textContent === h.app.ctx.MSG.worldViewOff);
   assert.ok(btn, 'a toggle button was mounted in header-controls');
 
-  // Zone view is the default: radar shown, world hidden.
-  assert.equal(radar.hidden, false);
-  assert.equal(world.hidden, true);
-  assert.equal(btn.textContent, h.app.ctx.MSG.worldViewOn);
-
-  btn.dispatch('click');
-  assert.equal(h.app.state.worldView, true);
+  // World view is the default (W7): world shown, radar hidden.
   assert.equal(radar.hidden, true);
   assert.equal(world.hidden, false);
   assert.equal(btn.textContent, h.app.ctx.MSG.worldViewOff);
@@ -338,6 +347,35 @@ test('W6: the header-controls toggle swaps visibility between the radar and worl
   assert.equal(h.app.state.worldView, false);
   assert.equal(radar.hidden, false);
   assert.equal(world.hidden, true);
+  assert.equal(btn.textContent, h.app.ctx.MSG.worldViewOn);
+
+  // Clicking again overrides back to world view, even with no zone selected either way.
+  btn.dispatch('click');
+  assert.equal(h.app.state.worldView, true);
+  assert.equal(radar.hidden, true);
+  assert.equal(world.hidden, false);
+  h.app.stop();
+});
+
+test('W7: picking a real zone exits world view; clearing back to "All Zones" restores it', async () => {
+  const h = await boot({ withWorld: true });
+  assert.equal(h.app.state.worldView, true);
+  h.app.ctx.setZone({ mapId: 1440, name: 'Ashenvale' });
+  assert.equal(h.app.state.worldView, false);
+  assert.deepEqual(h.app.state.zone, { mapId: 1440, name: 'Ashenvale' });
+  h.app.ctx.setZone(null);
+  assert.equal(h.app.state.worldView, true);
+  assert.equal(h.app.state.zone, null);
+  h.app.stop();
+});
+
+test('W7: the manual toggle still overrides world view while a zone is selected', async () => {
+  const h = await boot({ withWorld: true });
+  h.app.ctx.setZone({ mapId: 1440, name: 'Ashenvale' });
+  assert.equal(h.app.state.worldView, false);
+  h.app.ctx.setWorldView(true);
+  assert.equal(h.app.state.worldView, true);
+  assert.deepEqual(h.app.state.zone, { mapId: 1440, name: 'Ashenvale' }); // setWorldView never touches zone
   h.app.stop();
 });
 

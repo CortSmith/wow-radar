@@ -86,6 +86,24 @@ test('without index.json the picker degrades: no image, a muted note, no errors'
   h.app.stop();
 });
 
+test('W7: picking a zone through the chart-picker dropdown itself also exits world view', async () => {
+  const h = await boot({ withIndex: true });
+  assert.equal(h.app.state.worldView, true); // fresh boot, nothing selected: world view default
+  const header = h.app.ctx.mount('header-controls');
+  const select = header.find((n) => n.tagName === 'SELECT');
+  assert.ok(select, 'chart-picker mounted its zone <select>');
+  select.value = '27'; // Dun Morogh, from demoApi's CHARTS fixture - a real mapId, not a direct setZone call
+  select.dispatch('change');
+  assert.deepEqual(h.app.state.zone, { mapId: 27, name: 'Dun Morogh' });
+  assert.equal(h.app.state.worldView, false);
+  // Picking "All Zones" (empty option) through the same dropdown restores the world-view default.
+  select.value = '';
+  select.dispatch('change');
+  assert.equal(h.app.state.zone, null);
+  assert.equal(h.app.state.worldView, true);
+  h.app.stop();
+});
+
 test('a zone missing from index.json shows the note but keeps the grid', async () => {
   const h = await boot({ withIndex: true });
   h.app.state.charts.push({ mapId: 999, name: 'Unmapped Place', x0: 0, x1: 1, y0: 0, y1: 1 });
