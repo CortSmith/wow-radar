@@ -157,21 +157,17 @@ key and any listener is not loopback (`RADAR_REQUIRE_KEYS`, default auto; `false
 The shipped `radar.env` sets all keys, so the units start as before; a hand-made env file without keys must set them
 or bind to loopback.
 
-### Zone maps (optional)
+### Zone maps (included by default)
 
-The radar draws a zone picture behind the contacts when it can find one. The images come from game data for personal
-use, so they are **not** in the binary and **not** in git. Build them into `dist` on request:
+The radar draws a zone picture (and the world map) behind the contacts. The images come from game data for personal
+use, so they are **not** in the binary and **not** in git; the build copies them from the repository's `maps/` folder
+into `dist/maps` automatically (`-NoMaps` / `--no-maps` leaves them out), and `SHA256SUMS` covers every file.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scriptsuild.ps1 -WithMaps     # or: sh scripts/build.sh --with-maps
-```
-
-This copies `..adar-cloudsitemaps` (WebP files plus `index.json`, about 15 MB) to `distmaps`; `SHA256SUMS`
-covers every file. Copy `dist` with `scp -r`, then `sudo sh install.sh` verifies `maps/` against `SHA256SUMS` and installs it
-into `/var/lib/radar-live/maps` (owned by root, 0755/0644: the service can read it but not change it).
-`radar.env` points the server at it with `RADAR_MAPS_DIR=/var/lib/radar-live/maps` (empty = feature off). An existing
-`radar.env` is never rewritten, so after upgrading from an older install add that line yourself and
-`sudo systemctl restart radar-db`. Check: `curl -sI localhost:8787/maps/index.json` answers 200 (the page asks for it
+Copy `dist` with `scp -r`, then `sudo sh install.sh` verifies `maps/` against `SHA256SUMS` and installs it into
+`/var/lib/radar-live/maps` (owned by root, 0755/0644: the service can read it but not change it). `radar-db.service`
+defaults `RADAR_MAPS_DIR` to that folder, so no flag and no `radar.env` edit is needed, even on an install whose
+`radar.env` predates maps; a `RADAR_MAPS_DIR=` line in `radar.env` still overrides it (empty = off).
+After installing, check: `curl -sI localhost:8787/maps/index.json` answers 200 (the page asks for it
 without a key). Without maps the page still works: grid and outline, plus a muted "no map image" note.
 
 ## 8. Upgrade and uninstall

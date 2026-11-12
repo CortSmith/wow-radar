@@ -15,6 +15,8 @@ Group=radar
 Environment=RADAR_DB_LISTEN=:8787
 Environment=RADAR_DB_INTERNAL_LISTEN=127.0.0.1:8789
 Environment=RADAR_AUDIT_LOG=/var/log/radar/security.log
+# install.sh puts the zone maps here; an old radar.env that never mentions it still finds them.
+Environment=RADAR_MAPS_DIR=/var/lib/radar-live/maps
 EnvironmentFile=/etc/radar-live/radar.env
 # Two listeners: RADAR_DB_LISTEN serves the page, /api/* and /healthz; RADAR_DB_INTERNAL_LISTEN
 # (loopback) serves only the write API /internal/* and /healthz. Keep the second one on loopback.

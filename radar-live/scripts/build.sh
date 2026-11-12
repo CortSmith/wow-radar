@@ -4,20 +4,21 @@
 #   radar-feed:             windows/amd64 and linux/amd64
 #   radar-client:           windows/amd64 (windowed exe, no console) and linux/amd64 (console + browser)
 # The deploy/ files are copied next to the binaries so dist/ is everything to scp to the laptop.
-# Zone maps: with --with-maps, ../radar-cloud/site/maps (WebP + index.json, ~15 MB, game data for personal use)
-# is copied to dist/maps and covered by SHA256SUMS. Without the flag dist/ stays small and map-free.
-# Usage: scripts/build.sh [--with-maps] [version]
+# Zone maps: ../maps (zone images, world map, index.json; game data for personal use) is copied to dist/maps by
+# default and covered by SHA256SUMS, so install.sh puts them where radar-db looks. --no-maps leaves them out.
+# (--with-maps is still accepted and does nothing: it is the default now.)
+# Usage: scripts/build.sh [--no-maps] [version]
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 dist="$root/dist"
 
-with_maps=no
-if [ "${1:-}" = "--with-maps" ]; then
-    with_maps=yes
-    shift
-fi
+with_maps=yes
+case "${1:-}" in
+    --no-maps) with_maps=no; shift ;;
+    --with-maps) shift ;;
+esac
 version=${1:-}
 if [ -z "$version" ]; then
     version=$(git describe --tags --always --dirty 2>/dev/null || true)
@@ -57,13 +58,13 @@ if [ -d deploy/fail2ban ]; then
 fi
 
 if [ "$with_maps" = yes ]; then
-    maps_src="$root/../radar-cloud/site/maps"
+    maps_src="$root/../maps"
     if [ -d "$maps_src" ]; then
         mkdir -p "$dist/maps"
         cp -R "$maps_src/." "$dist/maps/"
         echo "zone maps copied from $maps_src"
     else
-        echo "--with-maps: $maps_src not found; building without maps" >&2
+        echo "WARNING: $maps_src not found; building without maps (the page will show no map images)" >&2
     fi
 fi
 
