@@ -50,7 +50,9 @@ test('mergeTrail dedupes by t, sorts, caps', () => {
 test('groupParam maps Blue/Red checkboxes', () => {
   assert.equal(groupParam({ friendly: true, hostile: true }), 'any');
   assert.equal(groupParam({ friendly: true, hostile: false }), 'friendly');
-  assert.equal(groupParam({ friendly: false, hostile: true }), 'hostile');
+  // Red means hostile, neutral and unknown; the server's 'hostile' group leaves out neutral/unknown, so Red-only asks for all
+  // and the page filters locally (otherwise unticking Blue also hid the red neutral/unknown dots).
+  assert.equal(groupParam({ friendly: false, hostile: true }), 'any');
   assert.equal(groupParam({ friendly: false, hostile: false }), 'any');
 });
 

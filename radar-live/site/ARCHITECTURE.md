@@ -41,7 +41,7 @@ mount is missing does nothing. To remove a feature delete its file and its line 
 | Page input | Request |
 |---|---|
 | nothing selected | `GET /api/v1/sweep?scope=all&since=` |
-| zone picked (+Blue/Red) | `scope=zone&mapId=&grp=friendly\|hostile\|any` |
+| zone picked (+Blue/Red) | `scope=zone&mapId=&grp=friendly` or `any` (Red-only sends `any`: the page hides the blue ones itself) |
 | player picked | `scope=player&guid=&trail=1` and once `GET /api/v1/trail?guid=` |
 | ruleset (not Default) | `rs=` on every call |
 | search box (250 ms) | `GET /api/v1/contacts?q=&limit=50` |

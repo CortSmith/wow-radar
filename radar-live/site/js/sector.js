@@ -1,9 +1,12 @@
 // Sector selection -> the sweep query (PLAN.md section 4).
 
-/** Blue/Red checkboxes -> grp parameter. */
+/**
+ * Blue/Red checkboxes -> grp parameter. Only Blue-only maps to a server group. Red means hostile, neutral and unknown,
+ * which no single server group covers ('hostile' leaves out neutral/unknown), so Red-only asks for everything and the
+ * page hides the blue ones itself.
+ */
 export function groupParam(filters) {
   if (filters.friendly && !filters.hostile) return 'friendly';
-  if (filters.hostile && !filters.friendly) return 'hostile';
   return 'any';
 }
 
