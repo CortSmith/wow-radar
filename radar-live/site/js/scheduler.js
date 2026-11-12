@@ -9,6 +9,7 @@ export function createScheduler(opts) {
   let hidden = false;
   let stopped = true;
   let failures = 0;
+  let pausedDeadlineMs = null; // absolute time the next sweep was due when the tab was hidden
 
   const clear = () => {
     if (timer !== null) timers.clearTimeout(timer);
@@ -57,6 +58,7 @@ export function createScheduler(opts) {
     stop() {
       stopped = true;
       rerun = false;
+      pausedDeadlineMs = null;
       if (ctrl) ctrl.abort();
       clear();
     },
@@ -76,12 +78,18 @@ export function createScheduler(opts) {
       schedule(0);
     },
     setHidden(value) {
+      if (value === hidden) return;
       hidden = value;
       if (value) {
+        // Remember the pending deadline so the countdown survives the pause (null: nothing was pending).
+        pausedDeadlineMs = timer !== null ? nextAtMs : null;
         clear();
         return;
       }
-      if (!stopped && !running) schedule(0);
+      const deadline = pausedDeadlineMs;
+      pausedDeadlineMs = null;
+      // Resume with the time that was left; sweep immediately if the deadline passed or none was pending.
+      if (!stopped && !running) schedule(deadline === null ? 0 : Math.max(0, deadline - now()));
     },
     nextAt: () => nextAtMs,
     failures: () => failures,

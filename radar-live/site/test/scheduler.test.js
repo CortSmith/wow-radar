@@ -146,7 +146,7 @@ test('aborted runs do not count as failures', async () => {
   assert.equal(sched.failures(), 0);
 });
 
-test('pauses while hidden and sweeps immediately on return', async () => {
+test('pauses while hidden and sweeps immediately on return when the deadline passed', async () => {
   const { timers, calls, sched } = make();
   sched.start();
   await timers.advance(0);
@@ -159,6 +159,80 @@ test('pauses while hidden and sweeps immediately on return', async () => {
   await timers.advance(0);
   await flush();
   assert.equal(calls.length, 2);
+});
+
+test('returning with time left resumes the countdown instead of resetting or sweeping', async () => {
+  const { timers, calls, sched } = make();
+  sched.start();
+  await timers.advance(0);
+  await flush();
+  await timers.advance(20_000); // 40 s left of the 60 s interval
+  sched.setHidden(true);
+  assert.equal(sched.nextAt(), 0);
+  await timers.advance(10_000); // 30 s left when we return
+  sched.setHidden(false);
+  assert.equal(sched.nextAt(), timers.now() + 30_000, 'countdown continues, not restarted');
+  await timers.advance(0);
+  await flush();
+  assert.equal(calls.length, 1, 'no immediate sweep');
+  await timers.advance(29_999);
+  await flush();
+  assert.equal(calls.length, 1);
+  await timers.advance(1);
+  await flush();
+  assert.equal(calls.length, 2);
+});
+
+test('hidden during a running sweep: sweeps on return as before', async () => {
+  const gate = deferred();
+  const { timers, calls, sched } = make({ run: (signal, n) => (n === 1 ? gate.promise : undefined) });
+  sched.start();
+  await timers.advance(0);
+  await flush();
+  sched.setHidden(true);
+  gate.resolve();
+  await flush();
+  assert.equal(timers.pending(), 0, 'nothing scheduled while hidden');
+  sched.setHidden(false);
+  await timers.advance(0);
+  await flush();
+  assert.equal(calls.length, 2);
+});
+
+test('rapid hide/show toggling never stacks timers', async () => {
+  const { timers, calls, sched } = make();
+  sched.start();
+  await timers.advance(0);
+  await flush();
+  await timers.advance(10_000);
+  for (let i = 0; i < 5; i++) {
+    sched.setHidden(true);
+    sched.setHidden(false);
+  }
+  assert.equal(timers.pending(), 1);
+  assert.equal(sched.nextAt(), timers.now() + 50_000);
+  await timers.advance(50_000);
+  await flush();
+  assert.equal(calls.length, 2);
+});
+
+test('stop while hidden discards the paused deadline', async () => {
+  const { timers, calls, sched } = make();
+  sched.start();
+  await timers.advance(0);
+  await flush();
+  sched.setHidden(true);
+  sched.stop();
+  sched.setHidden(false);
+  await timers.advance(120_000);
+  await flush();
+  assert.equal(calls.length, 1);
+  sched.start();
+  sched.setHidden(true);
+  sched.setHidden(false);
+  await timers.advance(0);
+  await flush();
+  assert.equal(calls.length, 2, 'fresh start sweeps immediately, no stale deadline');
 });
 
 test('stop cancels everything', async () => {
