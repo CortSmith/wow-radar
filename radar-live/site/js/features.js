@@ -7,6 +7,7 @@ export const loaders = [
   () => import('./features/group-filter.js'),
   () => import('./features/time-zone.js'),
   () => import('./features/radar-canvas.js'),
+  () => import('./features/world-map.js'),
   () => import('./features/track-overlay.js'),
   () => import('./features/search.js'),
   () => import('./features/bounty-panel.js'),

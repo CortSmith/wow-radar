@@ -54,7 +54,13 @@ function click(h, pip) {
   h.canvas.dispatch('mouseup', at);
 }
 
-/** After a deselect: no player, an immediate (debounced) sweep with the given scope and since=0, nothing highlighted. */
+/**
+ * After a deselect: no player, an immediate (debounced) roster sweep with the given scope, no
+ * guid/trail (the roster sweep never carries either), nothing highlighted.
+ * Stage 11 U2: the roster stream is never wiped/reset by a selection change (that is exactly the bug
+ * this task fixes - the roster sector no longer depends on the focused player), so unlike before, the
+ * post-deselect sweep's `since` is whatever the ongoing roster poll is at, not forced back to 0.
+ */
 async function expectReverted(h, scope = 'all') {
   assert.equal(h.app.state.player, null);
   await h.timers.advance(DEBOUNCE_MS - 1); await settle();
@@ -64,7 +70,6 @@ async function expectReverted(h, scope = 'all') {
   assert.equal(s.length, before + 1, 'one sweep after the debounce');
   const last = s[s.length - 1];
   assert.equal(last.get('scope'), scope);
-  assert.equal(last.get('since'), '0');
   assert.equal(last.has('guid'), false);
   assert.equal(last.has('trail'), false);
   assert.equal(h.app.state.trail.length, 0);
@@ -86,13 +91,17 @@ test('setPlayer(null) emits selection and clears the player', async () => {
   h.app.stop();
 });
 
-test('clicking the selected list row again deselects', async () => {
+test('clicking the selected list row again just re-focuses it (stage 11 U4a: the row click never ' +
+  'deselects anymore - the row\'s own x button is the only way to remove it from the list)', async () => {
   const h = await boot();
-  await h.select([...h.app.state.contacts.values()][0]);
+  const c = [...h.app.state.contacts.values()][0];
+  await h.select(c);
   const row = h.rows().find((n) => n.className.includes('sel'));
   assert.ok(row, 'selected row highlighted');
   row.dispatch('click');
-  await expectReverted(h);
+  await h.timers.advance(DEBOUNCE_MS); await settle();
+  assert.deepEqual(h.app.state.player, { guid: c.guid, name: c.name }, 'still focused, not deselected');
+  assert.equal(h.app.state.tracked.size, 1, 'clicking an already-tracked row never adds a duplicate');
   h.app.stop();
 });
 
@@ -188,39 +197,57 @@ test('deselecting returns to the zone scope when a zone is picked', async () => 
 });
 
 test('no stale player stays pinned after deselecting', async () => {
+  // Stage 11 U2: the roster (state.contacts) is no longer wiped by selecting/deselecting a player, so
+  // "stays pinned" is now observable only through visibleContacts' pinned-guid argument, not through the
+  // contact disappearing from state.contacts entirely (that was an accidental side effect of the old,
+  // buggy design where selecting a player replaced the whole roster with just that one contact).
   const h = await boot();
   const c = [...h.app.state.contacts.values()][0];
   await h.select(c);
-  h.app.state.contacts.get(c.guid).lastSeen = T0 - 3_600_000;
-  assert.equal(visibleContacts(h.app.state.contacts, h.timers.now(), h.app.state.player.guid).length, 1);
+  h.app.state.contacts.get(c.guid).lastSeen = T0 - 3_600_000; // older than GONE_AFTER_MS
+  assert.equal(
+    visibleContacts(h.app.state.contacts, h.timers.now(), h.app.state.player.guid).some((x) => x.guid === c.guid),
+    true,
+    'pinned (kept visible) while selected despite being gone-stale',
+  );
   h.doc.dispatch('keydown', { key: 'Escape' });
   assert.equal(h.app.state.player, null);
-  assert.equal(h.app.state.contacts.has(c.guid), false);
+  assert.equal(
+    visibleContacts(h.app.state.contacts, h.timers.now(), undefined).some((x) => x.guid === c.guid),
+    false,
+    'no longer pinned once deselected, so the gone-stale contact is filtered out again',
+  );
   h.app.stop();
 });
 
-test('selecting from the list shows the name in the search box with an x on its right, like the Go app', async () => {
+test('selecting from the list renders a track chip; the search text box itself stays empty (stage 11 U3: chips replaced the old mirrored-name-in-box UI)', async () => {
   const h = await boot();
   assert.equal(h.clearBtn.hidden, true, 'no x while nothing is selected');
   const c = [...h.app.state.contacts.values()][0];
   const row = h.rows().find((n) => n.textContent.includes(c.name));
   row.dispatch('click');
   await h.timers.advance(DEBOUNCE_MS); await settle();
-  assert.equal(h.input.value, c.name, 'the selection is shown in the search box');
-  assert.equal(h.clearBtn.hidden, false, 'the x is shown for a selection made in the list');
-  h.clearBtn.dispatch('click');
+  assert.equal(h.input.value, '', 'an external selection no longer fills the search text box');
+  assert.equal(h.clearBtn.hidden, true, 'the text-clear x stays hidden: nothing was typed');
+  const chip = h.top.find((n) => n.className === 'chip');
+  assert.ok(chip, 'a chip for the selected player is rendered');
+  assert.ok(chip.textContent.includes(c.name));
+  h.clearBtn.dispatch('click'); // the "clear search" x still deselects everyone, same as Escape
   await expectReverted(h);
-  assert.equal(h.input.value, '', 'the search box is emptied');
+  assert.equal(h.input.value, '', 'the search box stays empty');
   assert.equal(h.clearBtn.hidden, true, 'the x is hidden again');
+  assert.equal(!!h.top.find((n) => n.className === 'chip'), false, 'the chip is gone');
   h.app.stop();
 });
 
-test('selecting a blip on the radar also shows the x', async () => {
+test('selecting a blip on the radar also renders a track chip', async () => {
   const h = await boot();
   const pip = h.pips()[0];
   click(h, pip);
   await h.timers.advance(DEBOUNCE_MS); await settle();
-  assert.equal(h.input.value, pip.name);
-  assert.equal(h.clearBtn.hidden, false);
+  assert.equal(h.input.value, '', 'the search text box is not filled by a blip click either');
+  const chip = h.top.find((n) => n.className === 'chip');
+  assert.ok(chip, 'a chip is rendered for the selected blip');
+  assert.ok(chip.textContent.includes(pip.name));
   h.app.stop();
 });

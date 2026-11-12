@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildScene } from '../js/scene.js';
 import { paintScene, readColors } from '../js/draw.js';
+import { hitTestScene } from '../js/projection.js';
 import { demoApi } from '../dev-demo.mjs';
 
 const NOW = 1_760_000_000_000;
@@ -98,6 +99,52 @@ test('zooming crops the map image to the visible part, so the map zooms with the
   assert.deepEqual(panned.call.slice(1, 5), [625, 225, 250, 150], 'z=4 centred right: a quarter-size crop');
   const f = zoomed.scene.frame;
   assert.deepEqual(zoomed.call.slice(5), [f.x, f.y, f.w, f.h], 'the crop always fills the frame');
+});
+
+test('stage 11 U4b: every pip is tracked:true and scene.hasTracked is false when nothing is tracked', () => {
+  const s = buildScene({ state: mkState({ tracked: new Map() }), now: NOW, size: { w: 900, h: 600 }, view, opts: { fixed: true, rangeYd: 300 }, image: null });
+  assert.equal(s.hasTracked, false);
+  assert.ok(s.pips.length > 0);
+  assert.ok(s.pips.every((p) => p.tracked === true));
+});
+
+test('stage 11 U4b: only tracked guids get tracked:true, and scene.hasTracked is true, when a set is active', () => {
+  const state = mkState();
+  const guid = [...state.contacts.keys()][0];
+  state.tracked = new Map([[guid, { guid, name: 'x' }]]);
+  const s = buildScene({ state, now: NOW, size: { w: 900, h: 600 }, view, opts: { fixed: true, rangeYd: 300 }, image: null });
+  assert.equal(s.hasTracked, true);
+  const tracked = s.pips.filter((p) => p.tracked);
+  assert.deepEqual(tracked.map((p) => p.guid), [guid]);
+  assert.ok(s.pips.some((p) => p.tracked === false), 'other pips are not tracked');
+});
+
+test('stage 11 U4b: hit-testing still finds a faded (non-tracked) pip at the same radius', () => {
+  const state = mkState();
+  const [faded, tracked] = [...state.contacts.keys()];
+  state.tracked = new Map([[tracked, { guid: tracked, name: 'x' }]]);
+  const s = buildScene({ state, now: NOW, size: { w: 900, h: 600 }, view, opts: { fixed: true, rangeYd: 300 }, image: null });
+  const fadedPip = s.pips.find((p) => p.guid === faded);
+  assert.equal(fadedPip.tracked, false);
+  const hit = hitTestScene(s.pips, s.trail, fadedPip.sx, fadedPip.sy, 1);
+  assert.equal(hit, fadedPip, 'hit-testing finds the faded pip at its exact coordinates');
+});
+
+test('stage 11 U4b: paintPips fades non-tracked pips and rings tracked ones when a set is active', () => {
+  const state = mkState();
+  const [faded, tracked] = [...state.contacts.keys()];
+  state.tracked = new Map([[tracked, { guid: tracked, name: 'x' }]]);
+  const calls = [];
+  const rec = new Proxy({ strokeStyle: null }, {
+    get: (t, k) => (k in t ? t[k] : (...a) => calls.push({ fn: k, strokeStyle: t.strokeStyle, alpha: t.globalAlpha })),
+    set: (t, k, v) => { t[k] = v; return true; },
+  });
+  const size = { w: 900, h: 600 };
+  const scene = buildScene({ state, now: NOW, size, view, opts: { fixed: true, rangeYd: 300 }, image: null });
+  paintScene(rec, scene, size, readColors(null, null), null);
+  const fillCalls = calls.filter((c) => c.fn === 'fill');
+  assert.ok(fillCalls.some((c) => c.alpha === 0.35), 'at least one fill happens at reduced alpha for a non-tracked pip');
+  assert.ok(fillCalls.some((c) => c.alpha === 1), 'the tracked pip is filled at full alpha');
 });
 
 test('grid lines move with the zoom instead of staying fixed to the frame', () => {

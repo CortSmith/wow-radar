@@ -43,12 +43,14 @@ export function buildScene({ state, now, size, view, opts, image }) {
   const chart = state.charts.find((c) => c.mapId === mapId) || null;
   const guid = state.player ? state.player.guid : '';
   const proj = projector({ chart, opts, size, view, image, blips, guid });
+  const hasTracked = state.tracked && state.tracked.size > 0;
   const pips = blips.map((b) => {
     const [sx, sy] = proj.project(b.x, b.y);
-    return { guid: b.guid, name: b.name, sx, sy, color: b.color, status: b.status, selected: b.guid === guid, contact: b.contact };
+    const tracked = hasTracked ? state.tracked.has(b.guid) : true;
+    return { guid: b.guid, name: b.name, sx, sy, color: b.color, status: b.status, selected: b.guid === guid, contact: b.contact, tracked };
   });
   const trail = state.trail
     .filter((f) => f.mapId === mapId)
     .map((f) => ({ ...f, sx: proj.project(f.x, f.y)[0], sy: proj.project(f.x, f.y)[1] }));
-  return { mapId, chart, fixed: proj.fixed, frame: proj.frame, view, pips, trail };
+  return { mapId, chart, fixed: proj.fixed, frame: proj.frame, view, pips, trail, hasTracked };
 }

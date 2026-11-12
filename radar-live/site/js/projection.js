@@ -11,6 +11,30 @@ export function worldToPct(chart, x, y) {
   return [((chart.y1 - y) / dy) * FULL, ((chart.x1 - x) / dx) * FULL];
 }
 
+/**
+ * Stage 14 W3a: image-pixel (x,y) -> frame percent [px,py] for an image of size w x h. Plain pixel
+ * space, no axis swap/flip (unlike worldToPct, which is for zone charts in game-world coordinates) -
+ * a continent PNG's own x/y already run top-left to bottom-right like any other image.
+ */
+export function imageToPct(w, h, x, y) {
+  if (!w || !h) return [HALF, HALF];
+  return [(x / w) * FULL, (y / h) * FULL];
+}
+
+/**
+ * Stage 14 W3a: projector for a continent-pixel-space image (w x h) onto a screen frame, given a
+ * pan/zoom view - the same shape as scene.js's fixedProjector, but for plain image pixels instead of
+ * a zone chart's world coordinates, so continent rectangles and PNGs can reuse the same pan/zoom view
+ * {z,cx,cy} and the same clampView/panFrom/zoomAt helpers above.
+ */
+export function continentProjector(w, h, frame, view) {
+  const span = FULL / view.z;
+  return (x, y) => {
+    const [px, py] = imageToPct(w, h, x, y);
+    return [frame.x + ((px - (view.cx - span / 2)) / span) * frame.w, frame.y + ((py - (view.cy - span / 2)) / span) * frame.h];
+  };
+}
+
 /** Largest rect with the given aspect inside w x h minus pad, centred. */
 export function fitFrame(w, h, aspect, pad) {
   const aw = w - pad * 2;
@@ -68,4 +92,14 @@ export function hitTest(points, mx, my, radius) {
     }
   }
   return best;
+}
+
+/**
+ * Stage 11 U5: hit-tests both the live pips and the drawn trail (history) points with the same
+ * radius, so hovering a historical dot shows a tooltip too. Pips win ties: any pip within radius
+ * is returned before the trail is even tested, so a pip sitting exactly on top of a historical fix
+ * always shows as the live pip, never the history point underneath it.
+ */
+export function hitTestScene(pips, trail, mx, my, radius) {
+  return hitTest(pips, mx, my, radius) || hitTest(trail, mx, my, radius);
 }

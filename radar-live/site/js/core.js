@@ -7,7 +7,7 @@ import { makeEl } from './dom.js';
 import { createClient } from './client.js';
 import { createScheduler } from './scheduler.js';
 import { mergeContacts, mergeTrail } from './merge.js';
-import { sectorOf, sectorKey, sweepParams } from './sector.js';
+import { rosterSectorOf, sectorKey, sweepParams } from './sector.js';
 import { fmtTime, safeZone } from './format.js';
 
 const SWEEP_PATH = '/api/v1/sweep';
@@ -62,13 +62,22 @@ export function safeStorage(storage) {
   };
 }
 
+/**
+ * state.tracked is an ordered Map<guid,{guid,name}> (stage 11 U1): the set of players the user has
+ * added to track, insertion-ordered so the LAST entry is always the most recently added/focused one.
+ * state.player stays a read-only derived getter = that most-recent entry (or null when empty), so every
+ * feature written for single-select (history-panel, bounty-panel, view-model, track-overlay, sector.js,
+ * scene.js, draw.js, radar-canvas.js, contact-list.js, search.js) keeps working unchanged.
+ */
 function initialState(prefs, config) {
-  return {
+  const tracked = new Map();
+  const state = {
     rs: 'default',
-    player: null,
     zone: null,
     filters: { friendly: true, hostile: true, stale: true },
     contacts: new Map(),
+    tracked,
+    trackedData: new Map(), // stage 11 U2: Map<guid,{contact, trail}>, one entry per tracked player
     trail: [],
     charts: [],
     lastNow: 0,
@@ -80,7 +89,20 @@ function initialState(prefs, config) {
     wantTrail: false,
     viewKey: prefs.get(config.VIEW_KEY_STORAGE, '') || '',
     mapImage: null,
+    // Stage 14 W6: pure view-mode flag (world map vs the single-zone radar). Never resets
+    // player/tracked/zone/filters; toggled by features/world-map.js's header-controls button and by
+    // gotoZone (clicking a zone in the world view switches back to zone view automatically).
+    worldView: false,
   };
+  Object.defineProperty(state, 'player', {
+    enumerable: true,
+    get() {
+      let focused = null;
+      for (const p of tracked.values()) focused = p; // Map iteration order = insertion order; last = most recent
+      return focused;
+    },
+  });
+  return state;
 }
 
 /**
@@ -105,9 +127,13 @@ export function createApp(env) {
   let ticker = null;
   let keydown = null;
 
-  /** Drops loaded rows when the sector (rule-set, scope, guid, map, group) changed. */
-  function applySectorChange() {
-    const key = sectorKey(sectorOf(state), state.rs);
+  /**
+   * Drops loaded roster rows when the ROSTER sector (rule-set, zone, group) changed. Stage 11 U2:
+   * uses rosterSectorOf, which never looks at state.tracked/state.player, so adding, removing or
+   * focusing a tracked player never trips this and never wipes the roster everyone else sees.
+   */
+  function applyRosterSectorChange() {
+    const key = sectorKey(rosterSectorOf(state), state.rs);
     if (key === loadedKey) return false;
     loadedKey = key;
     state.contacts.clear();
@@ -117,15 +143,42 @@ export function createApp(env) {
     return true;
   }
 
+  /**
+   * Stage 11 U2: one GET per tracked guid (scope=player&guid=&trail=1), sequential (TRACK_MAX is
+   * small, no concurrency pool needed). Each result's contact is merged into the shared roster
+   * (state.contacts) so that row stays fresh even if the player left the roster's zone/all window;
+   * its own trail is kept distinctly in state.trackedData so a later task can draw several trails.
+   * A failed request for one guid is logged and skipped - it never drops the roster or the other guids.
+   */
+  async function runTrackedSweeps(signal) {
+    for (const guid of [...state.tracked.keys()]) {
+      if (signal.aborted) return;
+      let res;
+      try {
+        res = await client.get(SWEEP_PATH, sweepParams({ scope: 'player', guid }, state.rs, 0, true), signal);
+      } catch (err) {
+        if (err && err.name === 'AbortError') return; // the whole cycle was aborted, not just this guid
+        log(`tracked sweep failed for ${guid}`, err);
+        continue;
+      }
+      if (signal.aborted || !state.tracked.has(guid)) continue; // removed mid-cycle: drop the result
+      const contact = (res.contacts && res.contacts[0]) || null;
+      const prev = state.trackedData.get(guid) || { contact: null, trail: [] };
+      const trail = res.trail && res.trail.length ? mergeTrail(prev.trail, res.trail, config.TRAIL_CAP) : prev.trail;
+      state.trackedData.set(guid, { contact: contact || prev.contact, trail });
+      if (contact) mergeContacts(state.contacts, [contact], config.MAX_CONTACTS);
+    }
+  }
+
   async function runSweep(signal) {
-    applySectorChange();
+    applyRosterSectorChange();
     const key = loadedKey;
     const since = state.lastNow ? Math.max(0, state.lastNow - config.SINCE_OVERLAP_MS) : 0;
     state.conn = 'polling';
     bus.emit('conn');
     let res;
     try {
-      res = await client.get(SWEEP_PATH, sweepParams(sectorOf(state), state.rs, since, state.wantTrail), signal);
+      res = await client.get(SWEEP_PATH, sweepParams(rosterSectorOf(state), state.rs, since, false), signal);
     } catch (err) {
       if (!signal.aborted) {
         state.conn = 'error';
@@ -136,6 +189,18 @@ export function createApp(env) {
     }
     if (signal.aborted || key !== loadedKey) return;
     absorb(res);
+    if (state.tracked.size) await runTrackedSweeps(signal);
+    if (!signal.aborted) {
+      bus.emit('sweep', res);
+      for (const f of active) {
+        if (typeof f.onSweep !== 'function') continue;
+        try {
+          f.onSweep(res, ctx);
+        } catch (err) {
+          log(`feature ${f.name} onSweep failed`, err);
+        }
+      }
+    }
   }
 
   function absorb(res) {
@@ -147,15 +212,6 @@ export function createApp(env) {
     state.error = null;
     state.lastOkAt = env.now();
     bus.emit('conn');
-    bus.emit('sweep', res);
-    for (const f of active) {
-      if (typeof f.onSweep !== 'function') continue;
-      try {
-        f.onSweep(res, ctx);
-      } catch (err) {
-        log(`feature ${f.name} onSweep failed`, err);
-      }
-    }
   }
 
   const scheduler = createScheduler({
@@ -169,8 +225,34 @@ export function createApp(env) {
     onError: (err) => log('sweep failed', err),
   });
 
+  /** Adds/re-focuses one player in state.tracked (moves it to the end = most recent), evicting the oldest past TRACK_MAX. */
+  function addTracked(p) {
+    const player = { guid: p.guid, name: p.name || '' };
+    const existed = state.tracked.has(player.guid);
+    state.tracked.delete(player.guid);
+    if (!existed && state.tracked.size >= config.TRACK_MAX) {
+      const oldest = state.tracked.keys().next().value;
+      state.tracked.delete(oldest);
+      state.trackedData.delete(oldest); // stage 11 U2: no lingering trail/contact for an evicted guid
+    }
+    state.tracked.set(player.guid, player);
+  }
+
+  // The single-select legacy trail (state.trail, filled by track-overlay.js's own /api/v1/trail fetch)
+  // is scoped to whichever player is currently focused. Stage 11 U2 stopped resetting it as a side
+  // effect of a sector-key change (the roster sector no longer depends on the focused player at all),
+  // so it is reset explicitly here whenever the focused guid itself changes - including to null on a
+  // full deselect - restoring the "no leftover trail after deselecting / switching players" contract.
+  let focusedGuid = null;
   const changed = (event) => {
-    applySectorChange();
+    applyRosterSectorChange();
+    if (event === 'selection') {
+      const nowFocused = state.player ? state.player.guid : null;
+      if (nowFocused !== focusedGuid) {
+        focusedGuid = nowFocused;
+        state.trail = [];
+      }
+    }
     bus.emit(event);
     scheduler.requestNow();
   };
@@ -198,13 +280,55 @@ export function createApp(env) {
     fmtTime: (ms) => fmtTime(ms, state.tz),
     nextInMs: () => (scheduler.nextAt() ? Math.max(0, scheduler.nextAt() - env.now()) : 0),
     failures: () => scheduler.failures(),
-    setPlayer(player) {
-      state.player = player && player.guid ? { guid: player.guid, name: player.name || '' } : null;
+    /**
+     * Adds (or re-focuses, if already tracked) one player. Design decision (plan left this ambiguous):
+     * past TRACK_MAX the OLDEST tracked player is dropped to make room, rather than refusing the add -
+     * less surprising for a type-ahead search/click flow, where the most recent action should always win.
+     * Invalid input (no guid) is silently ignored, no event.
+     */
+    addPlayer(p) {
+      if (!p || !p.guid) return;
+      addTracked(p);
       changed('selection');
     },
-    /** Drops the selected player (sector falls back to the zone/all scope); a no-op when nothing is selected. */
+    /** Removes one tracked guid. If it was focused, focus falls back to the next most-recent, or null. No-op if untracked. */
+    removePlayer(guid) {
+      if (!state.tracked.has(guid)) return;
+      state.tracked.delete(guid);
+      state.trackedData.delete(guid); // stage 11 U2: prune immediately, don't wait for next sweep
+      changed('selection');
+    },
+    /** Empties the tracked set unconditionally (always emits selection, even if already empty). */
+    clearPlayers() {
+      state.tracked.clear();
+      state.trackedData.clear();
+      changed('selection');
+    },
+    /** Makes an already-tracked guid the focused one (moves it to "most recent") without adding/removing anyone. */
+    focusPlayer(guid) {
+      if (!state.tracked.has(guid)) return;
+      const p = state.tracked.get(guid);
+      state.tracked.delete(guid);
+      state.tracked.set(guid, p);
+      changed('selection');
+    },
+    /**
+     * Backward-compatible single-select (pre-U1 behaviour, kept for search.js/contact-list.js/radar-canvas.js
+     * until later tasks move them to the multi-select API): null/falsy clears everyone; a player clears
+     * everyone else and tracks just that one. Always emits exactly one 'selection', even clearing nothing.
+     */
+    setPlayer(player) {
+      state.tracked.clear();
+      state.trackedData.clear();
+      if (player && player.guid) addTracked(player);
+      changed('selection');
+    },
+    /** Drops every tracked player (sector falls back to the zone/all scope); a no-op when nothing is tracked. */
     deselect() {
-      if (state.player) ctx.setPlayer(null);
+      if (state.tracked.size === 0) return;
+      state.tracked.clear();
+      state.trackedData.clear();
+      changed('selection');
     },
     setZone(zone) {
       state.zone = zone && Number.isFinite(zone.mapId) ? { mapId: zone.mapId, name: zone.name || '' } : null;
@@ -217,6 +341,17 @@ export function createApp(env) {
     setFilters(patch) {
       Object.assign(state.filters, patch);
       changed('filters');
+    },
+    /**
+     * Stage 14 W6: switches between the world map and the single-zone radar. A pure view-mode flag -
+     * never touches player/tracked/zone/filters. Routed through changed('worldView') (not a bare
+     * bus.emit) because rosterSectorOf now looks at state.worldView too (world view always wants the
+     * 'all' scope roster sweep, regardless of a selected zone), so toggling it must also re-check
+     * applyRosterSectorChange and kick the scheduler, same as every other sector-affecting setter here.
+     */
+    setWorldView(v) {
+      state.worldView = Boolean(v);
+      changed('worldView');
     },
     /** The key lives in memory; it is written to localStorage only when the user ticked "remember". */
     setViewKey(key, remember = false) {

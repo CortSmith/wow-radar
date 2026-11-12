@@ -13,6 +13,7 @@ export const CONFIG = Object.freeze({
   SEARCH_LIMIT: 50,
   BOUNTY_LIMIT: 50,
   HISTORY_ROWS_MAX: 200,
+  TRACK_MAX: 8, // cap on state.tracked (stage 11 U1); oldest tracked player is dropped to make room past this
   MAX_CONTACTS: 5_000, // bound on rows kept in the browser
   TRAIL_CAP: 5_000,
   MAPS_BASE_URL: 'maps/', // folder holding zone images and index.json (optional)

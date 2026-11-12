@@ -1,15 +1,29 @@
 // Canvas painting for a scene built by scene.js. The only file that touches the 2D context.
+import { trackColorClass } from './trackcolors.js';
+
 const PIP_RADIUS_PX = 5;
 const SELECT_RING_PX = 9;
+const HOVER_RING_PX = 11;
 const GRID_STEPS = 10;
-const DEFAULTS = { bg: '#0a0d12', line: '#262d3a', friendly: '#3b82f6', hostile: '#ef4444', stale: '#4b5563', text: '#e6e9ef' };
+const UNTRACKED_ALPHA = 0.35;
+const TRACK_RING_PX = 8;
+const DEFAULTS = {
+  bg: '#0a0d12', line: '#262d3a', friendly: '#3b82f6', hostile: '#ef4444', stale: '#4b5563', text: '#e6e9ef',
+  'track-1': '#332288', 'track-2': '#88ccee', 'track-3': '#44aa99', 'track-4': '#117733',
+  'track-5': '#999933', 'track-6': '#882255', 'track-7': '#aa4499', 'track-8': '#ddcc77',
+};
 
 /** Reads the theme colours from CSS custom properties (falls back to the defaults). */
 export function readColors(win, root) {
   const out = { ...DEFAULTS };
   if (!win || !win.getComputedStyle || !root) return out;
   const style = win.getComputedStyle(root);
-  for (const [key, cssVar] of [['friendly', '--friendly'], ['hostile', '--hostile'], ['stale', '--stale'], ['line', '--line'], ['text', '--text']]) {
+  const keys = [
+    ['friendly', '--friendly'], ['hostile', '--hostile'], ['stale', '--stale'], ['line', '--line'], ['text', '--text'],
+    ['track-1', '--track-1'], ['track-2', '--track-2'], ['track-3', '--track-3'], ['track-4', '--track-4'],
+    ['track-5', '--track-5'], ['track-6', '--track-6'], ['track-7', '--track-7'], ['track-8', '--track-8'],
+  ];
+  for (const [key, cssVar] of keys) {
     const v = style.getPropertyValue(cssVar).trim();
     if (v) out[key] = v;
   }
@@ -97,12 +111,28 @@ function paintTrail(g, trail, colors) {
   }
 }
 
-function paintPips(g, pips, colors) {
+/**
+ * Stage 11 U4b: when a tracked set is active (hasTracked), non-tracked pips are drawn faded (hit-testing
+ * still works off the same sx/sy, labels were never drawn on the canvas so there's nothing to hide), and
+ * tracked pips get a ring in their stable per-guid track colour (trackcolors.js) so the radar matches the
+ * list's track-colour swatches.
+ */
+function paintPips(g, pips, colors, hasTracked) {
   for (const p of pips) {
+    const faded = hasTracked && !p.tracked;
+    g.globalAlpha = faded ? UNTRACKED_ALPHA : 1;
     g.beginPath();
     g.arc(p.sx, p.sy, PIP_RADIUS_PX, 0, Math.PI * 2);
     g.fillStyle = colors[p.color] || colors.hostile;
     g.fill();
+    if (hasTracked && p.tracked) {
+      g.strokeStyle = colors[trackColorClass(p.guid)] || colors.text;
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(p.sx, p.sy, TRACK_RING_PX, 0, Math.PI * 2);
+      g.stroke();
+    }
+    g.globalAlpha = 1;
     if (!p.selected) continue;
     g.strokeStyle = colors.text;
     g.lineWidth = 2;
@@ -112,13 +142,41 @@ function paintPips(g, pips, colors) {
   }
 }
 
-/** Paints one frame. img: a loaded image for the map background or null. */
-export function paintScene(g, scene, size, colors, img) {
+/**
+ * Stage 11 U5: highlights the hovered dot with a slightly larger ring than the selection ring, and for
+ * a hovered trail (history) point also draws thin lines to its immediate chronological neighbours
+ * (scene.trail is already time-ordered) so the path direction is obvious. hover: the resolved point
+ * from tooltip.js's resolveHoverPoint ({sx,sy,isTrail,prev,next}), or null for no hover.
+ */
+function paintHover(g, hover, colors) {
+  if (!hover) return;
+  g.strokeStyle = colors.text;
+  g.lineWidth = 2;
+  g.beginPath();
+  g.arc(hover.sx, hover.sy, HOVER_RING_PX, 0, Math.PI * 2);
+  g.stroke();
+  if (!hover.isTrail) return;
+  g.lineWidth = 1;
+  g.beginPath();
+  if (hover.prev) {
+    g.moveTo(hover.prev.sx, hover.prev.sy);
+    g.lineTo(hover.sx, hover.sy);
+  }
+  if (hover.next) {
+    g.moveTo(hover.sx, hover.sy);
+    g.lineTo(hover.next.sx, hover.next.sy);
+  }
+  g.stroke();
+}
+
+/** Paints one frame. img: a loaded image for the map background or null. hover: see paintHover. */
+export function paintScene(g, scene, size, colors, img, hover = null) {
   g.clearRect(0, 0, size.w, size.h);
   g.fillStyle = colors.bg;
   g.fillRect(0, 0, size.w, size.h);
   if (scene.fixed) paintFrame(g, scene, colors, img);
   else paintRings(g, size, colors);
   paintTrail(g, scene.trail, colors);
-  paintPips(g, scene.pips, colors);
+  paintPips(g, scene.pips, colors, scene.hasTracked);
+  paintHover(g, hover, colors);
 }

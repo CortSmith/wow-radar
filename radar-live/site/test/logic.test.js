@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { classify, visibleContacts } from '../js/staleness.js';
 import { mergeContacts, mergeTrail } from '../js/merge.js';
-import { groupParam, sectorOf, sectorKey, sweepParams } from '../js/sector.js';
+import { groupParam, sectorOf, rosterSectorOf, sectorKey, sweepParams } from '../js/sector.js';
 import { fmtAge, fmtTime, fmtNum, fmtAvg, safeZone } from '../js/format.js';
-import { worldToPct, fitFrame, clampView, zoomAt, panFrom, freeProjection, hitTest } from '../js/projection.js';
+import { worldToPct, fitFrame, clampView, zoomAt, panFrom, freeProjection, hitTest, hitTestScene, imageToPct, continentProjector } from '../js/projection.js';
 import { findMapEntry } from '../js/charts.js';
 import { chooseViewMap, toBlips } from '../js/view-model.js';
 import { CONFIG, resolveConfig } from '../js/config.js';
@@ -63,6 +63,17 @@ test('sectorOf: player beats zone beats all', () => {
   assert.deepEqual(sectorOf({ filters }), { scope: 'all' });
 });
 
+test('W6: rosterSectorOf stays zone-scoped out of worldView, but is always "all" while worldView is true', () => {
+  const filters = { friendly: true, hostile: true };
+  // worldView false (or absent, same as every pre-W6 caller) - zone still scopes the roster sweep.
+  assert.deepEqual(rosterSectorOf({ zone: { mapId: 37 }, filters, worldView: false }), { scope: 'zone', mapId: 37, grp: 'any' });
+  assert.deepEqual(rosterSectorOf({ zone: { mapId: 37 }, filters }), { scope: 'zone', mapId: 37, grp: 'any' });
+  // worldView true - 'all', even with a zone still selected underneath.
+  assert.deepEqual(rosterSectorOf({ zone: { mapId: 37 }, filters, worldView: true }), { scope: 'all' });
+  // no zone selected either way - 'all'.
+  assert.deepEqual(rosterSectorOf({ zone: null, filters, worldView: false }), { scope: 'all' });
+});
+
 test('sweepParams builds the contract query', () => {
   assert.deepEqual(sweepParams({ scope: 'all' }, 'default', 0, false), { scope: 'all', since: 0 });
   assert.deepEqual(sweepParams({ scope: 'zone', mapId: 0, grp: 'hostile' }, 'pvp', 55, false),
@@ -103,6 +114,26 @@ test('worldToPct: y counted from the left edge at y1, x from the top at x1', () 
   assert.deepEqual(worldToPct({ x0: 1, x1: 1, y0: 0, y1: 1 }, 5, 5), [50, 50]);
 });
 
+test('imageToPct: plain pixel space, no axis swap (unlike worldToPct)', () => {
+  assert.deepEqual(imageToPct(200, 100, 0, 0), [0, 0]);
+  assert.deepEqual(imageToPct(200, 100, 200, 100), [100, 100]);
+  assert.deepEqual(imageToPct(200, 100, 100, 50), [50, 50]);
+  assert.deepEqual(imageToPct(0, 0, 5, 5), [50, 50]);
+});
+
+test('continentProjector: maps a continent image onto a frame, respecting pan/zoom like fixedProjector', () => {
+  const frame = { x: 0, y: 0, w: 100, h: 100 };
+  const view = { z: 1, cx: 50, cy: 50 };
+  const project = continentProjector(200, 100, frame, view);
+  assert.deepEqual(project(0, 0), [0, 0]);
+  assert.deepEqual(project(200, 100), [100, 100]);
+  assert.deepEqual(project(100, 50), [50, 50]);
+  // zoomed in 2x centred: the centre point stays put, the corners move outward off-frame
+  const zoomedProject = continentProjector(200, 100, frame, { z: 2, cx: 50, cy: 50 });
+  assert.deepEqual(zoomedProject(100, 50), [50, 50]);
+  assert.ok(zoomedProject(0, 0)[0] < 0);
+});
+
 test('fitFrame keeps aspect inside padding', () => {
   const f = fitFrame(1000, 500, 2, 10);
   assert.ok(Math.abs(f.w / f.h - 2) < 1e-9);
@@ -134,6 +165,28 @@ test('hitTest finds nearest within radius', () => {
   assert.equal(hitTest(pts, 13, 10, 8).id, 'b');
   assert.equal(hitTest(pts, 100, 100, 8), null);
   assert.equal(hitTest([], 0, 0, 8), null);
+});
+
+// Stage 11 U5: hitTestScene tests pips and the trail together, same radius, pips winning ties.
+test('hitTestScene: trail points are now hittable, same radius as pips', () => {
+  const pips = [];
+  const trail = [{ sx: 10, sy: 10, t: 1, kind: 'exact' }];
+  assert.equal(hitTestScene(pips, trail, 11, 10, 8).t, 1, 'a trail point within radius is hit');
+  assert.equal(hitTestScene(pips, trail, 100, 100, 8), null, 'out of radius: no hit');
+  assert.equal(hitTestScene([], [], 0, 0, 8), null, 'empty pips and trail: no hit');
+});
+
+test('hitTestScene: a pip wins over an overlapping (even closer) trail point within the radius', () => {
+  const pips = [{ sx: 10, sy: 10, guid: 'p', color: 'friendly' }];
+  const trail = [{ sx: 10, sy: 10, t: 1, kind: 'exact' }]; // sits exactly on top of the pip
+  const hit = hitTestScene(pips, trail, 10, 10, 8);
+  assert.equal(hit.guid, 'p', 'the pip is returned, not the historical fix underneath it');
+});
+
+test('hitTestScene: falls back to the trail when no pip is within radius', () => {
+  const pips = [{ sx: 90, sy: 90, guid: 'p' }];
+  const trail = [{ sx: 10, sy: 10, t: 1, kind: 'approx' }];
+  assert.equal(hitTestScene(pips, trail, 10, 10, 8).kind, 'approx');
 });
 
 test('findMapEntry matches chart names loosely', () => {

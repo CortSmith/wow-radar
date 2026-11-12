@@ -1,8 +1,9 @@
 // The radar: canvas, tooltip, range/map/fixed-frame controls, pan/zoom, click-to-select.
 import { buildScene } from '../scene.js';
 import { paintScene, readColors } from '../draw.js';
-import { clampView, panFrom, zoomAt, hitTest } from '../projection.js';
+import { clampView, panFrom, zoomAt, hitTest, hitTestScene } from '../projection.js';
 import { fmtAge } from '../format.js';
+import { tooltipModel, resolveHoverPoint, hoverKeyFor } from '../tooltip.js';
 
 const DEFAULT_VIEW = { z: 1, cx: 50, cy: 50 };
 const HIT_RADIUS_PX = 10;
@@ -13,7 +14,7 @@ const TIP_OFFSET_PX = 12;
 export default {
   name: 'radar-canvas',
   init(ctx) {
-    const { MSG, fmt, state } = ctx;
+    const { MSG, state } = ctx;
     const wrap = ctx.mount('radar');
     if (!wrap) return;
     const canvas = ctx.el('canvas', { attrs: { 'aria-label': MSG.title } });
@@ -23,7 +24,7 @@ export default {
     wrap.appendChild(tip);
     wrap.appendChild(empty);
 
-    const ui = { view: { ...DEFAULT_VIEW }, fixed: true, bg: true, rangeYd: RANGE.initial, scene: null, img: null, imgUrl: '' };
+    const ui = { view: { ...DEFAULT_VIEW }, fixed: true, bg: true, rangeYd: RANGE.initial, scene: null, img: null, imgUrl: '', hoverKey: null };
     buildControls(ctx, ui);
     wireInput(ctx, canvas, tip, ui);
 
@@ -40,21 +41,19 @@ export default {
       canvas.width = Math.round(size.w * dpr);
       canvas.height = Math.round(size.h * dpr);
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      paintScene(g, ui.scene, size, colors, image ? ui.img : null);
+      paintScene(g, ui.scene, size, colors, image ? ui.img : null, resolveHoverPoint(ui.scene, ui.hoverKey));
     }
     ui.draw = draw;
-    ui.fmtTip = (p) => tipText(ctx, p, fmt, fmtAge);
+    ui.fmtTip = (hit) => tooltipModel(hit, tipCtx(ctx, fmtAge)).join('\n');
     for (const ev of ['sweep', 'reset', 'selection', 'filters', 'view', 'charts', 'tick']) ctx.bus.on(ev, draw);
     if (ctx.win) ctx.win.addEventListener('resize', draw);
     draw();
   },
 };
 
-function tipText(ctx, p, fmt, fmtAge) {
-  const c = p.contact;
-  const head = `${p.name}${c.zone ? ` - ${c.zone}` : ''}`;
-  const line = fmt(ctx.MSG.tipLine, { reaction: c.reaction, state: p.status, level: c.level || '?' });
-  return `${head}\n${line}\n${fmt(ctx.MSG.tipSeen, { age: fmtAge(ctx.now() - c.lastSeen) })}`;
+/** The small plain object tooltipModel()'s pure ctx parameter needs, built from the page ctx. */
+function tipCtx(ctx, fmtAge) {
+  return { MSG: ctx.MSG, fmt: ctx.fmt, now: ctx.now, fmtAge, fmtTime: ctx.fmtTime, state: ctx.state };
 }
 
 /** Loads the zone image named by state.mapImage (optional; failures just leave the background empty). */
@@ -100,12 +99,17 @@ function wireInput(ctx, canvas, tip, ui) {
       ui.draw();
       return;
     }
-    const hit = ui.scene ? hitTest(ui.scene.pips, m.x, m.y, HIT_RADIUS_PX) : null;
+    // Stage 11 U5: tests both the pips and the drawn trail (history) points, same HIT_RADIUS_PX, pips
+    // winning ties - so hovering a historical dot of a tracked player's trail shows a tooltip too.
+    const hit = ui.scene ? hitTestScene(ui.scene.pips, ui.scene.trail, m.x, m.y, HIT_RADIUS_PX) : null;
+    ui.hoverKey = hoverKeyFor(hit);
     tip.hidden = !hit;
-    if (!hit) return;
-    tip.textContent = ui.fmtTip(hit);
-    tip.style.left = `${m.x + TIP_OFFSET_PX}px`;
-    tip.style.top = `${m.y + TIP_OFFSET_PX}px`;
+    if (hit) {
+      tip.textContent = ui.fmtTip(hit);
+      tip.style.left = `${m.x + TIP_OFFSET_PX}px`;
+      tip.style.top = `${m.y + TIP_OFFSET_PX}px`;
+    }
+    ui.draw(); // redraw so the hover ring (and, for a trail point, its neighbour lines) tracks the mouse
   });
   canvas.addEventListener('mousedown', (e) => {
     const m = local(e);
@@ -121,7 +125,7 @@ function wireInput(ctx, canvas, tip, ui) {
     else if (ctx.state.player && ctx.state.player.guid === hit.guid) ctx.deselect();
     else ctx.setPlayer({ guid: hit.guid, name: hit.name });
   });
-  canvas.addEventListener('mouseleave', () => { drag = null; tip.hidden = true; });
+  canvas.addEventListener('mouseleave', () => { drag = null; tip.hidden = true; ui.hoverKey = null; ui.draw(); });
   canvas.addEventListener('dblclick', () => { ui.view = { ...DEFAULT_VIEW }; ui.draw(); });
   canvas.addEventListener('wheel', (e) => {
     if (e.preventDefault) e.preventDefault();

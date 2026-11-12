@@ -26,15 +26,47 @@ serves from disk instead.
 | `js/merge.js`, `js/staleness.js` | delta merge by guid, trail merge, live/stale/gone |
 | `js/view-model.js`, `js/projection.js`, `js/scene.js`, `js/draw.js` | what is drawn: map choice, filters, geometry, scene, canvas painting |
 | `js/format.js`, `js/charts.js`, `js/dom.js` | formatting + time zone, map-image lookup, safe DOM builder |
+| `js/trackcolors.js` | stable per-guid track colour (FNV-1a hash of guid mod 8, colour-blind-safe palette; `--track-1..8` in `style.css`) |
+| `js/tooltip.js` | pure `tooltipModel(target, ctx)` → row strings, for a live pip or a historical trail point; `hoverKeyFor`/`resolveHoverPoint` re-locate a hovered point across scene rebuilds |
+| `js/worldpath.js` | pure `worldPath(trail)` → chronological per-zone "visits" (consecutive same-mapId fixes collapsed), used by the world map's cross-zone lines |
+| `js/worldcounts.js` | pure `zoneCounts`/`chipRadius`/`chipTooltipModel` for the world map's friendly/hostile chips |
 | `js/features.js` | the one list of features (one dynamic-import line each) |
-| `js/features/*.js` | `status`, `view-key`, `ruleset-switch`, `chart-picker`, `group-filter`, `time-zone`, `radar-canvas`, `track-overlay`, `search`, `bounty-panel`, `contact-list`, `history-panel` |
+| `js/features/*.js` | `status`, `view-key`, `ruleset-switch`, `chart-picker`, `group-filter`, `time-zone`, `radar-canvas`, `track-overlay`, `search`, `bounty-panel`, `contact-list`, `history-panel`, `world-map` |
 | `js/main.js` | browser boot |
 | `dev-demo.mjs`, `dev-server.mjs` | demo backend + static server for development (not embedded) |
 
 Feature contract: `{name, init(ctx), onSweep(result, ctx), destroy()}`. `ctx` exposes `state`, `bus`, `el`, `mount(name)`,
-`api`, `setPlayer/deselect/setZone/setRuleset/setFilters`, `refreshNow`, `fmtTime`. Mount points are the `data-mount` attributes of
-`index.html`: `header-status header-controls notice radar side-top side-panels side-list below footer`. A feature whose
-mount is missing does nothing. To remove a feature delete its file and its line in `features.js`.
+`api`, `addPlayer/removePlayer/clearPlayers/focusPlayer/setPlayer/deselect/setZone/setRuleset/setFilters/setWorldView`,
+`refreshNow`, `fmtTime`. Mount points are the `data-mount` attributes of `index.html`: `header-status header-controls notice radar
+world side-top side-panels side-list below footer`. A feature whose mount is missing does nothing. To remove a feature delete its
+file and its line in `features.js`.
+
+## Multi-select / tracking (stage 11)
+`state.tracked` is an ordered `Map<guid,{guid,name}>` (cap `TRACK_MAX`=8 in `config.js`; oldest evicted past the cap).
+`state.player` is a **derived, read-only getter** = the focused (most recently added/clicked) tracked player, so every older
+feature that reads `state.player` is unaffected. `ctx.addPlayer/removePlayer/clearPlayers/focusPlayer` manage the set;
+`setPlayer`/`deselect` stay as back-compat single-select wrappers. The search box (`features/search.js`) renders one chip per
+tracked player (coloured via `trackcolors.js`), not a single filled box. `contact-list.js` shows the full roster always; tracked
+rows sort first and get an `x`, everyone else gets `.dim` (never hidden, unless "Show only tracked" is checked) plus a
+non-colour `title`/`aria-label` cue. `radar-canvas.js`/`draw.js` fade non-tracked dots (`UNTRACKED_ALPHA`) and ring tracked ones in
+their track colour. The sweep is two independent streams per cycle (`core.js`): the roster sweep (`sector.js` `rosterSectorOf`,
+never invalidated by tracking changes) always fills `state.contacts`; a second, per-guid `scope=player&trail=1` sweep for every
+tracked guid fills `state.trackedData: Map<guid,{contact,trail}>` without touching the roster. Hover tooltips
+(`radar-canvas.js`+`tooltip.js`) work on both live pips and historical trail points via `hitTestScene` (pips win ties); a trail
+point's name/zone fall back through `trackedData` → `contacts` → the guid itself.
+
+## World map (stage 14)
+`maps/world/<Continent>.png` + `maps/world/index.json` (`{continents:[{id,name,file,w,h,zones:[{mapId,name,x,y,w,h}]}]}`) are
+produced read-only from the local game install by `extract_maps.py --world` (see the root `README.md`), served the same way
+`maps/index.json` already is (`ctx.fetchJson`, no view key). `features/world-map.js` renders one canvas per continent (its own
+pan/zoom), zone outline rects, friendly/hostile "chip" circles sized by `sqrt(count)` (from `worldcounts.js`, computed off
+`state.contacts` client-side — no server change), a hover tooltip per chip, and each tracked player's cross-zone path
+(`worldpath.js` + the zone rects, one line per player in their track colour, thickening/arrowhead toward the most recent visit).
+Clicking a chip calls the local `gotoZone(ctx, mapId, name, which)` helper: `setZone` always, `setFilters({friendly,hostile})`
+only when a specific chip (not the bare zone rect) was clicked, then `setWorldView(false)` to return to the zone radar. The
+`state.worldView` flag (`ctx.setWorldView`, bus event `'worldView'`) toggles the `radar`/`world` mount sections and switches
+`rosterSectorOf` to `scope:'all'` even while a zone is selected (so the world map's counts reflect every zone, not just the one
+underneath) — zone-view behaviour is unchanged when `worldView` is false.
 
 ## Sector / API map
 

@@ -3,9 +3,21 @@ export const MSG = Object.freeze({
   title: 'Nearby Radar',
   allZones: 'All zones',
   noMapImage: 'no map image',
+  noWorldMap: 'World map not available yet.',
+  // Stage 14 W6: header-controls toggle between the world map and the single-zone radar.
+  worldViewOn: 'World map',
+  worldViewOff: 'Back to zone',
+  // Stage 14 W3b: world-map chip hover tooltip (zone name + exact friendly/hostile counts).
+  worldChipFriendly: '{n} friendly',
+  worldChipHostile: '{n} hostile',
   zoneLabel: 'Zone',
   noData: 'No contacts in this sector yet.',
   summary: '{n} contacts ({s} stale)',
+  // Stage 11 U4a: header line + roster greying when 1+ players are tracked (see contact-list.js).
+  trackSummary: 'Tracking {tracked} of {total} - others greyed',
+  notTracked: 'not in your search',
+  onlyTracked: 'Show only tracked',
+  onlyTrackedHint: 'Hide players you are not tracking instead of greying them out',
   nextUpdate: 'next update in {s}s',
   updating: 'updating...',
   retryIn: 'error, retry in {s}s',
@@ -37,6 +49,8 @@ export const MSG = Object.freeze({
   searchClear: 'Clear search and track (Esc)',
   searchNone: 'No players found.',
   searchFailed: 'Search failed.',
+  searchRemove: 'Remove {name}',
+  searchClearAll: 'Clear all',
   tracking: 'Tracking {name}',
   trackInfo: 'Track: {n} fixes ({a} approximate)',
   trackNone: 'No track recorded.',
@@ -57,6 +71,12 @@ export const MSG = Object.freeze({
   errorNetwork: 'Could not reach the server.',
   tipLine: '{reaction}, {state}, level {level}',
   tipSeen: 'seen {age} ago',
+  // Stage 11 U5: tooltip rows for a hovered HISTORY (trail) dot. No reaction/state line - historical
+  // state is not stored, so the history tooltip never fabricates one (see stage-11-radar-ux.md 3.5).
+  tipHistory: '{time} ({age} ago)',
+  tipKindExact: 'exact fix',
+  tipKindApprox: 'approx. fix',
+  tipUnknown: 'Unknown player',
 });
 
 /** Fills {name} placeholders. */
