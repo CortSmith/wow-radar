@@ -826,8 +826,9 @@ def extract_world(args):
         for z in c["zones"]:
             all_zones.append({
                 "mapId": z["mapId"], "name": z["name"],
-                "x": round(z["x"] * f) + c["x_off"], "y": round(z["y"] * f) + c["y_off"],
-                "w": round(z["w"] * f), "h": round(z["h"] * f),
+                # One position point per zone (the old rect's centre); the rect itself is no longer emitted.
+                "px": round((z["x"] + z["w"] / 2) * f) + c["x_off"],
+                "py": round((z["y"] + z["h"] / 2) * f) + c["y_off"],
             })
     all_zones.sort(key=lambda z: z["mapId"])
 

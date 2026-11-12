@@ -1,6 +1,7 @@
 :root{
   --bg:#0e1117;--panel:#161b24;--line:#262d3a;--text:#e6e9ef;--muted:#8b94a5;
   --friendly:#3b82f6;--hostile:#ef4444;--neutral:#ef4444;--unknown:#ef4444;--stale:#4b5563;--gold:#f5b301;
+  --world-neutral:#f59e0b; /* world-map pie slice for neutral contacts only; radar/sidebar still treat neutral as red */
   /* Stage 11 U3: per-guid track colours (js/trackcolors.js). 8 colours from Paul Tol's colour-blind-safe
      "muted" qualitative palette, with any entry too close to the friendly/hostile/stale/gold tokens above
      dropped, so a tracked player's swatch/ring/line is never confused with those. This page has a single
@@ -40,9 +41,14 @@ main{flex:1;display:flex;min-height:0;position:relative}
 .empty[hidden],.tip[hidden],.mapNote[hidden]{display:none}
 .mapNote{position:absolute;left:10px;bottom:8px;z-index:2;font-size:12px;pointer-events:none}
 .tip{position:absolute;pointer-events:none;background:#000c;border:1px solid var(--line);border-radius:4px;padding:4px 8px;white-space:pre;z-index:3}
+.tip.listTip{position:fixed;z-index:10;max-width:260px}
 #worldWrap{flex:1;position:relative;min-width:0;display:flex;flex-direction:column;background:#0a0d12}
 .worldList{flex:1;display:flex;flex-direction:column;min-height:0}
 .worldContinent{flex:1;position:relative;min-height:0}
+.worldLegend{display:flex;gap:14px;justify-content:center;padding:4px 10px;font-size:12px;flex:none}
+.worldLegendItem{display:inline-flex;align-items:center;gap:5px}
+.worldLegendSwatch{width:10px;height:10px;border-radius:50%;display:inline-block}
+.worldLegendSwatch.friendly{background:var(--friendly)}.worldLegendSwatch.neutral{background:var(--world-neutral)}.worldLegendSwatch.hostile{background:var(--hostile)}
 .worldContinentName{position:absolute;left:10px;top:6px;z-index:2;color:var(--muted);font-size:12px;pointer-events:none}
 .worldContinent canvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#0a0d12;cursor:grab}
 #side{width:300px;max-width:45%;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line);min-height:0;margin-left:auto}

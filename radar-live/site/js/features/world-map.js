@@ -1,8 +1,11 @@
-// World view (stage 14): continent art + zone outline rectangles, pan + zoom (task W3a), per-zone
-// friendly/hostile count chips and their hover tooltip (task W3b), plus tracked players' cross-zone
-// world paths drawn on top of the chips (task W4).
-// click-to-navigate (W5): clicking a chip goes to that zone with the matching friendly/hostile filter;
-// clicking a zone's empty area goes there with filters untouched; a drag never navigates.
+// World view (stage 14): continent art + one pie-chart dot per zone, pan + zoom (task W3a). Each zone is a
+// single position point (px/py in the continent's own pixel space; legacy rect-only zones fall back to
+// their rectangle's centre). The dot is a pie of the zone's live friendly / neutral / hostile contacts,
+// sized by total count, with a hover tooltip of the exact counts (W3b). Tracked players' cross-zone world
+// paths draw on top of the pies (W4).
+// click-to-navigate (W5): clicking a pie goes to that zone; the slice clicked picks the filter (friendly
+// -> Blue only, hostile or neutral -> Red only, since Red covers both); a click that misses every pie
+// does nothing, and a drag never navigates.
 // a header-controls toggle with the single-zone radar, both ways (W6): ctx.setWorldView flips
 // state.worldView, mountToggle()/mountVisibility() below wire the button + hidden-section swap, and
 // gotoZone (W5) switches back to zone view automatically on click. Loads
@@ -10,7 +13,7 @@
 // a same-site optional JSON file under ctx.config.MAPS_BASE_URL) and draws one canvas per continent.
 import { clampView, panFrom, zoomAt, continentProjector, fitFrame } from '../projection.js';
 import { readColors } from '../draw.js';
-import { zoneCounts, chipRadius, chipTooltipModel } from '../worldcounts.js';
+import { zoneCounts, zoneTotal, chipRadius, chipTooltipModel, pieSlices, sliceAt } from '../worldcounts.js';
 import { worldPath } from '../worldpath.js';
 import { trackColorClass } from '../trackcolors.js';
 
@@ -18,8 +21,8 @@ const DEFAULT_VIEW = { z: 1, cx: 50, cy: 50 };
 const WHEEL_ZOOM = 1.2;
 const FRAME_PAD_PX = 12;
 const WORLD_INDEX_PATH = 'world/';
-const CHIP_GAP_PX = 6; // half-gap between a zone's two chips, either side of its centre
-const CHIP_HIT_PAD_PX = 3; // slack added to a chip's own radius for the hover hit-test
+const CHIP_HIT_PAD_PX = 3; // slack added to a pie's own radius for the hover/click hit-test
+const PIE_SEPARATOR = '#0a0d12'; // thin line between slices (the canvas background colour)
 const CLICK_MOVE_PX = 4; // same mouseup-vs-drag threshold as radar-canvas.js's wireInput
 
 export default {
@@ -31,6 +34,7 @@ export default {
     const list = ctx.el('div', { className: 'worldList' });
     wrap.appendChild(empty);
     wrap.appendChild(list);
+    wrap.appendChild(buildLegend(ctx));
 
     // W6: a simple header-controls toggle between this world view and the single-zone radar. Purely
     // a view-mode flag (ctx.setWorldView) - never touches player/tracked/zone/filters.
@@ -94,8 +98,8 @@ function mountVisibility(ctx, worldWrap) {
 }
 
 /**
- * One continent's canvas: loads its PNG, draws it + its zones' outline rectangles and friendly/hostile
- * count chips, wires pan/zoom and chip hover.
+ * One continent's canvas: loads its PNG, draws it + one friendly/neutral/hostile pie per zone with live
+ * contacts, wires pan/zoom and pie hover/click.
  */
 function mountContinent(ctx, list, continent) {
   const box = ctx.el('div', { className: 'worldContinent' });
@@ -129,12 +133,10 @@ function mountContinent(ctx, list, continent) {
     const size = { w: canvas.clientWidth || 600, h: canvas.clientHeight || 280 };
     const frame = frameFor(size);
     const project = continentProjector(w, h, frame, ui.view);
-    // Chip layout is computed unconditionally (not gated on a 2D context existing) so hover hit-testing
-    // keeps working even when nothing can be painted yet (e.g. a canvas with no context in tests).
+    // Pie layout is computed unconditionally (not gated on a 2D context existing) so hover/click
+    // hit-testing keeps working even when nothing can be painted yet (e.g. a canvas with no context in tests).
     const counts = zoneCounts(ctx.state.contacts, ctx.now(), ctx.config);
     ui.chips = layoutChips(zones, project, counts);
-    // W5: screen-space zone rects, kept alongside ui.chips for the same click/hover hit-testing reason.
-    ui.zoneRects = layoutZoneRects(zones, project);
     // W4: computed unconditionally too (same reason as ui.chips above - keeps working even without a
     // 2D context, e.g. in tests).
     ui.paths = computeTrackedPaths(ctx.state.tracked, ctx.state.trackedData, zones, project);
@@ -153,21 +155,8 @@ function mountContinent(ctx, list, continent) {
       const [ix1, iy1] = project(w, h);
       g.drawImage(ui.img, ix0, iy0, ix1 - ix0, iy1 - iy0);
     }
-    g.strokeStyle = '#7fb3ff';
-    g.lineWidth = 1;
-    for (const z of zones) {
-      if (!(z.w > 0) || !(z.h > 0)) continue;
-      const [zx0, zy0] = project(z.x, z.y);
-      const [zx1, zy1] = project(z.x + z.w, z.y + z.h);
-      g.strokeRect(zx0, zy0, zx1 - zx0, zy1 - zy0);
-    }
-    for (const chip of ui.chips) {
-      g.beginPath();
-      g.fillStyle = chip.reaction === 'friendly' ? colors.friendly : colors.hostile;
-      g.arc(chip.x, chip.y, chip.r, 0, Math.PI * 2);
-      g.fill();
-    }
-    // W4: tracked players' world paths draw on top of the chips (stage-14-world-map.md 3.4).
+    for (const chip of ui.chips) paintPie(g, chip, colors);
+    // W4: tracked players' world paths draw on top of the pies (stage-14-world-map.md 3.4).
     for (const path of ui.paths) {
       paintWorldPath(g, path.points, colors[trackColorClass(path.guid)] || colors.text);
     }
@@ -184,58 +173,68 @@ function mountContinent(ctx, list, continent) {
 }
 
 /**
- * Screen-space chip layout for one continent's zones (pure given a projector + counts), reused for
- * both drawing and hover hit-testing. One chip per non-zero reaction bucket (zero means no chip at
- * all), friendly on the left half of the zone's rect and hostile on the right half, both vertically
- * centred. Returns [{mapId, name, friendly, hostile, reaction, x, y, r}, ...].
+ * A zone's single position point in its continent's pixel space: `px`/`py` when present, else (legacy
+ * rect-only index) the centre of its x/y/w/h rectangle, else null (nothing usable - the zone is skipped).
  */
-function layoutChips(zones, project, counts) {
+export function zonePoint(z) {
+  if (!z) return null;
+  if (Number.isFinite(z.px) && Number.isFinite(z.py)) return { x: z.px, y: z.py };
+  if (z.w > 0 && z.h > 0) return { x: z.x + z.w / 2, y: z.y + z.h / 2 };
+  return null;
+}
+
+/**
+ * Screen-space pie layout for one continent's zones (pure given a projector + counts), reused for both
+ * drawing and hit-testing. One pie per zone with at least one live contact, centred on the zone's point,
+ * radius from the zone's total. Returns [{mapId, name, friendly, neutral, hostile, x, y, r}, ...].
+ */
+export function layoutChips(zones, project, counts) {
   const chips = [];
   for (const z of zones) {
-    if (!(z.w > 0) || !(z.h > 0)) continue;
-    const cnt = counts.get(z.mapId) || { friendly: 0, hostile: 0 };
-    const [zx0, zy0] = project(z.x, z.y);
-    const [zx1, zy1] = project(z.x + z.w, z.y + z.h);
-    const cx = (zx0 + zx1) / 2;
-    const cy = (zy0 + zy1) / 2;
-    const fr = chipRadius(cnt.friendly);
-    const hr = chipRadius(cnt.hostile);
-    const base = { mapId: z.mapId, name: z.name || '', friendly: cnt.friendly, hostile: cnt.hostile };
-    if (fr > 0) chips.push({ ...base, reaction: 'friendly', x: cx - CHIP_GAP_PX, y: cy, r: fr });
-    if (hr > 0) chips.push({ ...base, reaction: 'hostile', x: cx + CHIP_GAP_PX, y: cy, r: hr });
+    const pt = zonePoint(z);
+    if (!pt) continue;
+    const cnt = counts.get(z.mapId) || { friendly: 0, neutral: 0, hostile: 0 };
+    const r = chipRadius(zoneTotal(cnt));
+    if (!(r > 0)) continue;
+    const [x, y] = project(pt.x, pt.y);
+    chips.push({ mapId: z.mapId, name: z.name || '', friendly: cnt.friendly, neutral: cnt.neutral, hostile: cnt.hostile, x, y, r });
   }
   return chips;
 }
 
 /**
- * W5: screen-space zone outline rects (pure given a projector), reused for both the outline draw loop
- * above and click hit-testing below - the same shape of helper as layoutChips. Returns
- * [{mapId, name, x0, y0, x1, y1}, ...] (one entry per zone with a non-zero size, same guard as drawing).
+ * Paints one zone's pie on any canvas-2D-like context (no DOM, testable with a fake context). One slice
+ * per non-empty bucket (pieSlices); a single bucket is a whole disc. A thin dark line separates slices.
+ * chip: {x, y, r, friendly, neutral, hostile}. colors: {friendly, neutral, hostile}.
  */
-function layoutZoneRects(zones, project) {
-  const rects = [];
-  for (const z of zones) {
-    if (!(z.w > 0) || !(z.h > 0)) continue;
-    const [x0, y0] = project(z.x, z.y);
-    const [x1, y1] = project(z.x + z.w, z.y + z.h);
-    rects.push({ mapId: z.mapId, name: z.name || '', x0, y0, x1, y1 });
+export function paintPie(g, chip, colors) {
+  const slices = pieSlices(chip);
+  if (slices.length === 0) return;
+  const multi = slices.length > 1;
+  for (const s of slices) {
+    g.beginPath();
+    if (multi) g.moveTo(chip.x, chip.y);
+    g.arc(chip.x, chip.y, chip.r, s.start, s.end);
+    if (multi) g.closePath();
+    g.fillStyle = colors[s.reaction];
+    g.fill();
+    if (multi) {
+      g.strokeStyle = PIE_SEPARATOR;
+      g.lineWidth = 1;
+      g.stroke();
+    }
   }
-  return rects;
 }
 
-/**
- * W5: the first zone rect (if any) containing (x, y), min/max-normalised since a rect's projected
- * corners are not guaranteed to come back in top-left/bottom-right order. Inclusive of the edges.
- */
-export function hitZoneRect(rects, x, y) {
-  for (const r of rects) {
-    const xMin = Math.min(r.x0, r.x1);
-    const xMax = Math.max(r.x0, r.x1);
-    const yMin = Math.min(r.y0, r.y1);
-    const yMax = Math.max(r.y0, r.y1);
-    if (x >= xMin && x <= xMax && y >= yMin && y <= yMax) return r;
+/** The small friendly / neutral / hostile colour key shown under the world canvases. */
+function buildLegend(ctx) {
+  const items = [['friendly', ctx.MSG.legendFriendly], ['neutral', ctx.MSG.legendNeutral], ['hostile', ctx.MSG.legendHostile]];
+  const legend = ctx.el('div', { className: 'worldLegend muted' });
+  for (const [kind, text] of items) {
+    legend.appendChild(ctx.el('span', { className: 'worldLegendItem' },
+      ctx.el('span', { className: `worldLegendSwatch ${kind}` }), text));
   }
-  return null;
+  return legend;
 }
 
 /**
@@ -245,7 +244,7 @@ export function hitZoneRect(rects, x, y) {
  */
 export function filterPatchFor(which) {
   if (which === 'friendly') return { friendly: true, hostile: false };
-  if (which === 'hostile') return { friendly: false, hostile: true };
+  if (which === 'hostile' || which === 'neutral') return { friendly: false, hostile: true }; // Red covers both
   return null;
 }
 
@@ -273,15 +272,15 @@ export function gotoZone(ctx, mapId, name, which) {
 export function worldPathPoints(visits, zones, project) {
   const byId = new Map();
   for (const z of zones) {
-    if (z.w > 0 && z.h > 0) byId.set(z.mapId, z);
+    const pt = zonePoint(z);
+    if (pt) byId.set(z.mapId, pt);
   }
   const points = [];
   for (const v of visits || []) {
-    const z = byId.get(v.mapId);
-    if (!z) continue;
-    const [x0, y0] = project(z.x, z.y);
-    const [x1, y1] = project(z.x + z.w, z.y + z.h);
-    points.push({ x: (x0 + x1) / 2, y: (y0 + y1) / 2, enteredAt: v.enteredAt });
+    const pt = byId.get(v.mapId);
+    if (!pt) continue;
+    const [x, y] = project(pt.x, pt.y);
+    points.push({ x, y, enteredAt: v.enteredAt });
   }
   return points;
 }
@@ -362,7 +361,7 @@ const TIP_OFFSET_PX = 10;
 
 /**
  * Mousedown+drag pans, wheel zooms, dblclick resets - same feel as radar-canvas.js's wireInput -
- * plus (W3b) hovering a chip shows `tip` with its zone name + exact counts, same tip-div pattern
+ * plus (W3b) hovering a pie shows `tip` with its zone name + exact counts, same tip-div pattern
  * radar-canvas.js uses.
  */
 function wireInput(ctx, canvas, tip, ui) {
@@ -374,20 +373,15 @@ function wireInput(ctx, canvas, tip, ui) {
     drag = { x: m.x, y: m.y, view: { ...ui.view } };
   });
   // W5: a mouseup within CLICK_MOVE_PX of mousedown is a click, not a drag - same distinction and
-  // threshold as radar-canvas.js's own pan-vs-click logic. A chip wins over a bare zone rect; neither
-  // hit is a no-op.
+  // threshold as radar-canvas.js's own pan-vs-click logic. Clicking a pie goes to its zone with the
+  // clicked slice's filter; a click that misses every pie is a no-op.
   canvas.addEventListener('mouseup', (e) => {
     const m = local(e);
     const wasClick = drag && Math.hypot(m.x - drag.x, m.y - drag.y) < CLICK_MOVE_PX;
     drag = null;
     if (!wasClick) return;
     const chip = hitChip(ui.chips, m.x, m.y);
-    if (chip) {
-      gotoZone(ctx, chip.mapId, chip.name, chip.reaction);
-      return;
-    }
-    const zone = hitZoneRect(ui.zoneRects || [], m.x, m.y);
-    if (zone) gotoZone(ctx, zone.mapId, zone.name);
+    if (chip) gotoZone(ctx, chip.mapId, chip.name, sliceAt(chip, m.x, m.y));
   });
   canvas.addEventListener('mousemove', (e) => {
     const m = local(e);

@@ -8,7 +8,7 @@ const GRID_STEPS = 10;
 const UNTRACKED_ALPHA = 0.35;
 const TRACK_RING_PX = 8;
 const DEFAULTS = {
-  bg: '#0a0d12', line: '#262d3a', friendly: '#3b82f6', hostile: '#ef4444', stale: '#4b5563', text: '#e6e9ef',
+  bg: '#0a0d12', line: '#262d3a', friendly: '#3b82f6', hostile: '#ef4444', neutral: '#f59e0b', stale: '#4b5563', text: '#e6e9ef',
   'track-1': '#332288', 'track-2': '#88ccee', 'track-3': '#44aa99', 'track-4': '#117733',
   'track-5': '#999933', 'track-6': '#882255', 'track-7': '#aa4499', 'track-8': '#ddcc77',
 };
@@ -19,7 +19,7 @@ export function readColors(win, root) {
   if (!win || !win.getComputedStyle || !root) return out;
   const style = win.getComputedStyle(root);
   const keys = [
-    ['friendly', '--friendly'], ['hostile', '--hostile'], ['stale', '--stale'], ['line', '--line'], ['text', '--text'],
+    ['friendly', '--friendly'], ['hostile', '--hostile'], ['neutral', '--world-neutral'], ['stale', '--stale'], ['line', '--line'], ['text', '--text'],
     ['track-1', '--track-1'], ['track-2', '--track-2'], ['track-3', '--track-3'], ['track-4', '--track-4'],
     ['track-5', '--track-5'], ['track-6', '--track-6'], ['track-7', '--track-7'], ['track-8', '--track-8'],
   ];

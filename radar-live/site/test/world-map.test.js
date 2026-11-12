@@ -8,7 +8,7 @@ import { loaders } from '../js/features.js';
 import { demoApi } from '../dev-demo.mjs';
 import { createFakeDocument } from './fake-dom.js';
 import { createFakeTimers } from './fake-timers.js';
-import { worldPathPoints, computeTrackedPaths, paintWorldPath, hitZoneRect, filterPatchFor, gotoZone } from '../js/features/world-map.js';
+import { worldPathPoints, computeTrackedPaths, paintWorldPath, zonePoint, layoutChips, paintPie, filterPatchFor, gotoZone } from '../js/features/world-map.js';
 
 const T0 = 1_760_000_000_000;
 const settle = async (n = 8) => { for (let i = 0; i < n; i++) await new Promise((r) => setImmediate(r)); };
@@ -20,13 +20,19 @@ const WORLD_INDEX = {
   ],
 };
 
-// Stage 14 W3b: one continent sized 100x100 with a single zone covering it entirely (0,0,100,100).
-// With the default 800x600 fake canvas and the default unzoomed view, this makes the zone rect's
-// screen centre land on an exact, easy-to-reason-about pixel (400, 300) - see fitFrame/continentProjector
-// in projection.js - so chip hit-testing in the hover test below doesn't need to replicate that math.
+// Stage 14 W3b: one continent sized 100x100 with a single zone whose position point is its centre (50,50).
+// With the default 800x600 fake canvas and the default unzoomed view, that lands on an exact, easy-to-reason-
+// about screen pixel (400, 300) - see fitFrame/continentProjector in projection.js - so pie hit-testing in
+// the tests below doesn't need to replicate that math.
 const SQUARE_WORLD_INDEX = {
+  continents: [{ id: 'test', name: 'TestLand', file: 'Test.png', w: 100, h: 100, zones: [{ mapId: 999, name: 'TestZone', px: 50, py: 50 }] }],
+};
+// Same continent, but the zone is described the legacy way (x/y/w/h rect, no px/py): its centre is the point.
+const LEGACY_RECT_WORLD_INDEX = {
   continents: [{ id: 'test', name: 'TestLand', file: 'Test.png', w: 100, h: 100, zones: [{ mapId: 999, name: 'TestZone', x: 0, y: 0, w: 100, h: 100 }] }],
 };
+
+const liveContact = (now, guid, reaction) => ({ guid, name: guid, reaction, mapId: 999, x: 0, y: 0, posTime: now, lastSeen: now });
 
 async function boot({ withWorld, index }) {
   const features = await Promise.all(loaders.map(async (l) => (await l()).default));
@@ -79,36 +85,93 @@ test('with the world index present, mounts one canvas per continent with its own
   h.app.stop();
 });
 
-test('W3b: hovering a chip shows the zone name + exact friendly/hostile counts', async () => {
+test('W3b: hovering a pie shows the zone name + exact friendly/neutral/hostile counts', async () => {
   const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
   const now = h.timers.now();
-  const c = (guid, reaction) => ({ guid, name: guid, reaction, mapId: 999, x: 0, y: 0, posTime: now, lastSeen: now });
-  h.app.state.contacts.set('f1', c('f1', 'friendly'));
-  h.app.state.contacts.set('f2', c('f2', 'friendly'));
-  h.app.state.contacts.set('f3', c('f3', 'friendly'));
-  h.app.state.contacts.set('h1', c('h1', 'hostile'));
+  for (const [g, r] of [['f1', 'friendly'], ['f2', 'friendly'], ['f3', 'friendly'], ['h1', 'hostile'], ['n1', 'neutral']]) h.app.state.contacts.set(g, liveContact(now, g, r));
   h.app.bus.emit('sweep', {});
   const canvas = h.world.find((n) => n.tagName === 'CANVAS');
   const tip = h.world.find((n) => n.className === 'tip');
 
-  canvas.dispatch('mousemove', { clientX: 394, clientY: 300 }); // the friendly chip's exact centre
+  canvas.dispatch('mousemove', { clientX: 400, clientY: 300 }); // the pie's exact centre
   assert.equal(tip.hidden, false);
-  assert.equal(tip.textContent, 'TestZone\n3 friendly\n1 hostile');
+  assert.equal(tip.textContent, 'TestZone\n3 friendly\n1 neutral\n1 hostile');
 
-  canvas.dispatch('mousemove', { clientX: 700, clientY: 590 }); // nowhere near either chip
+  canvas.dispatch('mousemove', { clientX: 700, clientY: 590 }); // nowhere near the pie
   assert.equal(tip.hidden, true);
   h.app.stop();
 });
 
-test('W3b: a reaction bucket at 0 draws no chip for it (nothing to hover there)', async () => {
+test('W3b: a zone with no live contacts draws no pie (nothing to hover there)', async () => {
   const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
+  const canvas = h.world.find((n) => n.tagName === 'CANVAS');
+  const tip = h.world.find((n) => n.className === 'tip');
+  canvas.dispatch('mousemove', { clientX: 400, clientY: 300 });
+  assert.equal(tip.hidden, true);
+  h.app.stop();
+});
+
+test('pies: a legacy rect-only zone (no px/py) is still placed at its rectangle centre', async () => {
+  const h = await boot({ withWorld: true, index: LEGACY_RECT_WORLD_INDEX });
   const now = h.timers.now();
-  h.app.state.contacts.set('f1', { guid: 'f1', name: 'f1', reaction: 'friendly', mapId: 999, x: 0, y: 0, posTime: now, lastSeen: now });
+  h.app.state.contacts.set('f1', liveContact(now, 'f1', 'friendly'));
   h.app.bus.emit('sweep', {});
   const canvas = h.world.find((n) => n.tagName === 'CANVAS');
   const tip = h.world.find((n) => n.className === 'tip');
-  canvas.dispatch('mousemove', { clientX: 406, clientY: 300 }); // where the hostile chip would be if drawn
-  assert.equal(tip.hidden, true);
+  canvas.dispatch('mousemove', { clientX: 400, clientY: 300 });
+  assert.equal(tip.hidden, false);
+  h.app.stop();
+});
+
+test('pies: zonePoint prefers px/py, falls back to the rect centre, and is null with neither', () => {
+  assert.deepEqual(zonePoint({ px: 12, py: 34, x: 0, y: 0, w: 10, h: 10 }), { x: 12, y: 34 });
+  assert.deepEqual(zonePoint({ x: 10, y: 20, w: 40, h: 20 }), { x: 30, y: 30 });
+  assert.equal(zonePoint({ x: 10, y: 20, w: 0, h: 20 }), null);
+  assert.equal(zonePoint({ mapId: 1 }), null);
+  assert.equal(zonePoint(null), null);
+});
+
+test('pies: layoutChips makes one pie per zone with contacts, at its projected point, sized by the total', () => {
+  const zones = [{ mapId: 1, name: 'A', px: 10, py: 20 }, { mapId: 2, name: 'B', px: 30, py: 40 }, { mapId: 3, name: 'C', px: 5, py: 5 }, { mapId: 4, name: 'D' }];
+  const counts = new Map([
+    [1, { friendly: 2, neutral: 1, hostile: 1 }],
+    [2, { friendly: 0, neutral: 0, hostile: 0 }], // present but empty -> no pie
+    [4, { friendly: 1, neutral: 0, hostile: 0 }], // no usable point -> skipped, no crash
+  ]);
+  const chips = layoutChips(zones, (x, y) => [x * 2, y * 2], counts);
+  assert.equal(chips.length, 1);
+  const c = chips[0];
+  assert.deepEqual([c.mapId, c.name, c.x, c.y, c.friendly, c.neutral, c.hostile], [1, 'A', 20, 40, 2, 1, 1]);
+  assert.ok(c.r > 0);
+  const bigger = layoutChips(zones, (x, y) => [x, y], new Map([[1, { friendly: 20, neutral: 0, hostile: 0 }]]))[0];
+  assert.ok(bigger.r > c.r, 'more contacts, bigger pie');
+});
+
+test('pies: paintPie draws one wedge per non-empty bucket in the right colours, with separators', () => {
+  const { g, calls } = fakeCtx();
+  const colors = { friendly: '#f', neutral: '#n', hostile: '#h' };
+  paintPie(g, { x: 10, y: 10, r: 8, friendly: 2, neutral: 0, hostile: 2 }, colors);
+  const fills = calls.filter((c) => c.fn === 'fill');
+  assert.deepEqual(fills.map((c) => c.fillStyle), ['#f', '#h']); // neutral is empty: no wedge
+  assert.equal(calls.filter((c) => c.fn === 'arc').length, 2);
+  assert.equal(calls.filter((c) => c.fn === 'stroke').length, 2); // a separator per wedge
+});
+
+test('pies: a single non-empty bucket paints one whole disc (no wedge, no separator), nothing for an empty chip', () => {
+  const one = fakeCtx();
+  paintPie(one.g, { x: 0, y: 0, r: 5, friendly: 0, neutral: 3, hostile: 0 }, { friendly: '#f', neutral: '#n', hostile: '#h' });
+  assert.deepEqual(one.calls.filter((c) => c.fn === 'fill').map((c) => c.fillStyle), ['#n']);
+  assert.ok(!one.calls.some((c) => c.fn === 'moveTo' || c.fn === 'stroke'));
+  const none = fakeCtx();
+  paintPie(none.g, { x: 0, y: 0, r: 5, friendly: 0, neutral: 0, hostile: 0 }, {});
+  assert.deepEqual(none.calls, []);
+});
+
+test('pies: the world section has a friendly / neutral / hostile legend', async () => {
+  const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
+  const items = h.world.findAll((n) => n.className === 'worldLegendItem');
+  assert.equal(items.length, 3);
+  assert.deepEqual(items.map((n) => n.textContent), ['Friendly', 'Neutral', 'Hostile']);
   h.app.stop();
 });
 
@@ -126,6 +189,12 @@ test('W4: worldPathPoints returns ordered centre points, skipping a visit whose 
     { x: 5, y: 5, enteredAt: 100 },
     { x: 25, y: 25, enteredAt: 200 },
   ]);
+});
+
+test('W4: worldPathPoints anchors on a zone\'s px/py point (not a rect centre) when present', () => {
+  const zones = [{ mapId: 1440, px: 7, py: 9 }, { mapId: 1431, px: 30, py: 40, x: 0, y: 0, w: 2, h: 2 }];
+  const visits = [{ mapId: 1440, enteredAt: 1 }, { mapId: 1431, enteredAt: 2 }];
+  assert.deepEqual(worldPathPoints(visits, zones, (x, y) => [x, y]), [{ x: 7, y: 9, enteredAt: 1 }, { x: 30, y: 40, enteredAt: 2 }]);
 });
 
 test('W4: worldPathPoints is empty for no visits or no zones, never throws', () => {
@@ -207,6 +276,7 @@ test('W4: a tracked player with no trail (or no trackedData yet) draws without t
 test('W5: filterPatchFor maps a chip reaction to the matching filter patch, and omits it for a plain zone click', () => {
   assert.deepEqual(filterPatchFor('friendly'), { friendly: true, hostile: false });
   assert.deepEqual(filterPatchFor('hostile'), { friendly: false, hostile: true });
+  assert.deepEqual(filterPatchFor('neutral'), { friendly: false, hostile: true }); // Red covers hostile and neutral
   assert.equal(filterPatchFor(undefined), null);
   assert.equal(filterPatchFor(null), null);
 });
@@ -236,69 +306,79 @@ test('W5: gotoZone always sets the zone, but calls setFilters only when a reacti
   assert.deepEqual(calls.setWorldView, [false, false, false]);
 });
 
-test('W5: hitZoneRect finds the containing rect (inclusive edges) or null outside every rect', () => {
-  const rects = [
-    { mapId: 1, name: 'A', x0: 0, y0: 0, x1: 10, y1: 10 },
-    { mapId: 2, name: 'B', x0: 20, y0: 20, x1: 10, y1: 30 }, // corners reversed on x - must still work
-  ];
-  assert.equal(hitZoneRect(rects, 5, 5).mapId, 1); // inside A
-  assert.equal(hitZoneRect(rects, 0, 0).mapId, 1); // top-left edge, inclusive
-  assert.equal(hitZoneRect(rects, 10, 10).mapId, 1); // bottom-right edge, inclusive
-  assert.equal(hitZoneRect(rects, 11, 5), null); // just outside A, not in B either
-  assert.equal(hitZoneRect(rects, 15, 25).mapId, 2); // inside B despite x0 > x1
-  assert.equal(hitZoneRect([], 0, 0), null);
-});
-
-test('W5: clicking a friendly chip navigates to its zone with the friendly-only filter', async () => {
-  const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
-  const now = h.timers.now();
-  h.app.state.contacts.set('f1', { guid: 'f1', name: 'f1', reaction: 'friendly', mapId: 999, x: 0, y: 0, posTime: now, lastSeen: now });
-  h.app.bus.emit('sweep', {});
+async function clickAt(h, x, y) {
   const canvas = h.world.find((n) => n.tagName === 'CANVAS');
-  canvas.dispatch('mousedown', { clientX: 394, clientY: 300 });
-  canvas.dispatch('mouseup', { clientX: 394, clientY: 300 }); // the friendly chip's exact centre
+  canvas.dispatch('mousedown', { clientX: x, clientY: y });
+  canvas.dispatch('mouseup', { clientX: x, clientY: y });
+}
+
+test('W5: clicking an all-friendly pie navigates to its zone with the friendly-only filter', async () => {
+  const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
+  h.app.state.contacts.set('f1', liveContact(h.timers.now(), 'f1', 'friendly'));
+  h.app.bus.emit('sweep', {});
+  await clickAt(h, 400, 300);
   assert.deepEqual(h.app.state.zone, { mapId: 999, name: 'TestZone' });
   assert.deepEqual(h.app.state.filters, { friendly: true, hostile: false, stale: true });
   h.app.stop();
 });
 
-test('W5: clicking a hostile chip navigates to its zone with the hostile-only filter', async () => {
+test('W5: clicking an all-hostile pie navigates to its zone with the hostile-only filter', async () => {
   const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
-  const now = h.timers.now();
-  h.app.state.contacts.set('h1', { guid: 'h1', name: 'h1', reaction: 'hostile', mapId: 999, x: 0, y: 0, posTime: now, lastSeen: now });
+  h.app.state.contacts.set('h1', liveContact(h.timers.now(), 'h1', 'hostile'));
   h.app.bus.emit('sweep', {});
-  const canvas = h.world.find((n) => n.tagName === 'CANVAS');
-  canvas.dispatch('mousedown', { clientX: 406, clientY: 300 });
-  canvas.dispatch('mouseup', { clientX: 406, clientY: 300 }); // the hostile chip's exact centre
+  await clickAt(h, 400, 300);
   assert.deepEqual(h.app.state.zone, { mapId: 999, name: 'TestZone' });
   assert.deepEqual(h.app.state.filters, { friendly: false, hostile: true, stale: true });
   h.app.stop();
 });
 
-test('W5: clicking a zone\'s empty area (no chip) navigates there, leaving filters untouched', async () => {
+test('W5: in a mixed pie the clicked slice picks the filter (friendly right half, hostile left half)', async () => {
+  const mk = async () => {
+    const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
+    h.app.state.contacts.set('f1', liveContact(h.timers.now(), 'f1', 'friendly'));
+    h.app.state.contacts.set('h1', liveContact(h.timers.now(), 'h1', 'hostile'));
+    h.app.bus.emit('sweep', {});
+    return h;
+  };
+  const right = await mk();
+  await clickAt(right, 404, 300); // clockwise from 12 o'clock: the first half of the turn is friendly
+  assert.deepEqual(right.app.state.filters, { friendly: true, hostile: false, stale: true });
+  right.app.stop();
+  const left = await mk();
+  await clickAt(left, 396, 300);
+  assert.deepEqual(left.app.state.filters, { friendly: false, hostile: true, stale: true });
+  left.app.stop();
+});
+
+test('W5: clicking a neutral slice goes to the zone with the Red-only (hostile) filter', async () => {
   const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
-  const canvas = h.world.find((n) => n.tagName === 'CANVAS');
-  canvas.dispatch('mousedown', { clientX: 200, clientY: 150 });
-  canvas.dispatch('mouseup', { clientX: 200, clientY: 150 }); // inside the zone, nowhere near either chip
+  h.app.state.contacts.set('n1', liveContact(h.timers.now(), 'n1', 'neutral'));
+  h.app.bus.emit('sweep', {});
+  await clickAt(h, 400, 300);
   assert.deepEqual(h.app.state.zone, { mapId: 999, name: 'TestZone' });
-  assert.deepEqual(h.app.state.filters, { friendly: true, hostile: true, stale: true }); // default, untouched
+  assert.deepEqual(h.app.state.filters, { friendly: false, hostile: true, stale: true });
   h.app.stop();
 });
 
-test('W5: clicking outside any zone does nothing', async () => {
+test('W5: clicking empty map (outside any pie) does nothing, even inside where the old zone box was', async () => {
   const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
-  const canvas = h.world.find((n) => n.tagName === 'CANVAS');
-  canvas.dispatch('mousedown', { clientX: 50, clientY: 50 });
-  canvas.dispatch('mouseup', { clientX: 50, clientY: 50 }); // outside the padded square frame
+  h.app.state.contacts.set('f1', liveContact(h.timers.now(), 'f1', 'friendly'));
+  h.app.bus.emit('sweep', {});
+  await clickAt(h, 200, 150);
+  assert.equal(h.app.state.zone, null);
+  assert.deepEqual(h.app.state.filters, { friendly: true, hostile: true, stale: true }); // default, untouched
+  await clickAt(h, 50, 50);
   assert.equal(h.app.state.zone, null);
   h.app.stop();
 });
 
 test('W5: a click-and-drag (mouse moved past the threshold) never navigates', async () => {
   const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
+  h.app.state.contacts.set('f1', liveContact(h.timers.now(), 'f1', 'friendly'));
+  h.app.bus.emit('sweep', {});
   const canvas = h.world.find((n) => n.tagName === 'CANVAS');
-  canvas.dispatch('mousedown', { clientX: 200, clientY: 150 });
-  canvas.dispatch('mouseup', { clientX: 240, clientY: 150 }); // 40px of movement - a drag, not a click
+  canvas.dispatch('mousedown', { clientX: 400, clientY: 300 });
+  canvas.dispatch('mouseup', { clientX: 440, clientY: 300 }); // 40px of movement - a drag, not a click
   assert.equal(h.app.state.zone, null);
   h.app.stop();
 });

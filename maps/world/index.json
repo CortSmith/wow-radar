@@ -10,374 +10,282 @@
     {
      "mapId": 1411,
      "name": "Durotar",
-     "x": 270,
-     "y": 305,
-     "w": 44,
-     "h": 34
+     "px": 292,
+     "py": 322
     },
     {
      "mapId": 1412,
      "name": "Mulgore",
-     "x": 183,
-     "y": 343,
-     "w": 44,
-     "h": 34
+     "px": 205,
+     "py": 360
     },
     {
      "mapId": 1413,
      "name": "The Barrens",
-     "x": 228,
-     "y": 328,
-     "w": 44,
-     "h": 34
+     "px": 250,
+     "py": 345
     },
     {
      "mapId": 1416,
      "name": "Alterac Mountains",
-     "x": 775,
-     "y": 193,
-     "w": 30,
-     "h": 24
+     "px": 790,
+     "py": 205
     },
     {
      "mapId": 1417,
      "name": "Arathi Highlands",
-     "x": 797,
-     "y": 236,
-     "w": 30,
-     "h": 24
+     "px": 812,
+     "py": 248
     },
     {
      "mapId": 1418,
      "name": "Badlands",
-     "x": 823,
-     "y": 383,
-     "w": 30,
-     "h": 24
+     "px": 838,
+     "py": 395
     },
     {
      "mapId": 1419,
      "name": "Blasted Lands",
-     "x": 760,
-     "y": 513,
-     "w": 30,
-     "h": 24
+     "px": 775,
+     "py": 525
     },
     {
      "mapId": 1420,
      "name": "Tirisfal Glades",
-     "x": 678,
-     "y": 168,
-     "w": 44,
-     "h": 34
+     "px": 700,
+     "py": 185
     },
     {
      "mapId": 1421,
      "name": "Silverpine Forest",
-     "x": 675,
-     "y": 228,
-     "w": 44,
-     "h": 34
+     "px": 697,
+     "py": 245
     },
     {
      "mapId": 1422,
      "name": "Western Plaguelands",
-     "x": 730,
-     "y": 155,
-     "w": 44,
-     "h": 34
+     "px": 752,
+     "py": 172
     },
     {
      "mapId": 1423,
      "name": "Eastern Plaguelands",
-     "x": 820,
-     "y": 108,
-     "w": 44,
-     "h": 34
+     "px": 842,
+     "py": 125
     },
     {
      "mapId": 1424,
      "name": "Hillsbrad Foothills",
-     "x": 757,
-     "y": 226,
-     "w": 30,
-     "h": 24
+     "px": 772,
+     "py": 238
     },
     {
      "mapId": 1425,
      "name": "The Hinterlands",
-     "x": 823,
-     "y": 168,
-     "w": 44,
-     "h": 34
+     "px": 845,
+     "py": 185
     },
     {
      "mapId": 1426,
      "name": "Dun Morogh",
-     "x": 716,
-     "y": 328,
-     "w": 44,
-     "h": 34
+     "px": 738,
+     "py": 345
     },
     {
      "mapId": 1427,
      "name": "Searing Gorge",
-     "x": 790,
-     "y": 363,
-     "w": 30,
-     "h": 24
+     "px": 805,
+     "py": 375
     },
     {
      "mapId": 1428,
      "name": "Burning Steppes",
-     "x": 780,
-     "y": 400,
-     "w": 30,
-     "h": 24
+     "px": 795,
+     "py": 412
     },
     {
      "mapId": 1429,
      "name": "Elwynn Forest",
-     "x": 733,
-     "y": 426,
-     "w": 30,
-     "h": 24
+     "px": 748,
+     "py": 438
     },
     {
      "mapId": 1430,
      "name": "Deadwind Pass",
-     "x": 767,
-     "y": 458,
-     "w": 30,
-     "h": 24
+     "px": 782,
+     "py": 470
     },
     {
      "mapId": 1431,
      "name": "Duskwood",
-     "x": 733,
-     "y": 460,
-     "w": 30,
-     "h": 24
+     "px": 748,
+     "py": 472
     },
     {
      "mapId": 1432,
      "name": "Loch Modan",
-     "x": 810,
-     "y": 336,
-     "w": 30,
-     "h": 24
+     "px": 825,
+     "py": 348
     },
     {
      "mapId": 1433,
      "name": "Redridge Mountains",
-     "x": 780,
-     "y": 428,
-     "w": 30,
-     "h": 24
+     "px": 795,
+     "py": 440
     },
     {
      "mapId": 1434,
      "name": "Stranglethorn Vale",
-     "x": 713,
-     "y": 508,
-     "w": 44,
-     "h": 34
+     "px": 735,
+     "py": 525
     },
     {
      "mapId": 1435,
      "name": "Swamp of Sorrows",
-     "x": 800,
-     "y": 468,
-     "w": 30,
-     "h": 24
+     "px": 815,
+     "py": 480
     },
     {
      "mapId": 1436,
      "name": "Westfall",
-     "x": 697,
-     "y": 470,
-     "w": 30,
-     "h": 24
+     "px": 712,
+     "py": 482
     },
     {
      "mapId": 1437,
      "name": "Wetlands",
-     "x": 773,
-     "y": 295,
-     "w": 44,
-     "h": 34
+     "px": 795,
+     "py": 312
     },
     {
      "mapId": 1438,
      "name": "Teldrassil",
-     "x": 143,
-     "y": 83,
-     "w": 44,
-     "h": 34
+     "px": 165,
+     "py": 100
     },
     {
      "mapId": 1439,
      "name": "Darkshore",
-     "x": 190,
-     "y": 168,
-     "w": 44,
-     "h": 34
+     "px": 212,
+     "py": 185
     },
     {
      "mapId": 1440,
      "name": "Ashenvale",
-     "x": 218,
-     "y": 228,
-     "w": 44,
-     "h": 34
+     "px": 240,
+     "py": 245
     },
     {
      "mapId": 1441,
      "name": "Thousand Needles",
-     "x": 218,
-     "y": 413,
-     "w": 44,
-     "h": 34
+     "px": 240,
+     "py": 430
     },
     {
      "mapId": 1442,
      "name": "Stonetalon Mountains",
-     "x": 206,
-     "y": 273,
-     "w": 44,
-     "h": 34
+     "px": 228,
+     "py": 290
     },
     {
      "mapId": 1443,
      "name": "Desolace",
-     "x": 138,
-     "y": 333,
-     "w": 44,
-     "h": 34
+     "px": 160,
+     "py": 350
     },
     {
      "mapId": 1444,
      "name": "Feralas",
-     "x": 150,
-     "y": 398,
-     "w": 44,
-     "h": 34
+     "px": 172,
+     "py": 415
     },
     {
      "mapId": 1445,
      "name": "Dustwallow Marsh",
-     "x": 258,
-     "y": 378,
-     "w": 44,
-     "h": 34
+     "px": 280,
+     "py": 395
     },
     {
      "mapId": 1446,
      "name": "Tanaris",
-     "x": 240,
-     "y": 475,
-     "w": 44,
-     "h": 34
+     "px": 262,
+     "py": 492
     },
     {
      "mapId": 1447,
      "name": "Azshara",
-     "x": 303,
-     "y": 263,
-     "w": 44,
-     "h": 34
+     "px": 325,
+     "py": 280
     },
     {
      "mapId": 1448,
      "name": "Felwood",
-     "x": 253,
-     "y": 183,
-     "w": 44,
-     "h": 34
+     "px": 275,
+     "py": 200
     },
     {
      "mapId": 1449,
      "name": "Un'Goro Crater",
-     "x": 200,
-     "y": 488,
-     "w": 30,
-     "h": 24
+     "px": 215,
+     "py": 500
     },
     {
      "mapId": 1450,
      "name": "Moonglade",
-     "x": 320,
-     "y": 220,
-     "w": 30,
-     "h": 24
+     "px": 335,
+     "py": 232
     },
     {
      "mapId": 1451,
      "name": "Silithus",
-     "x": 150,
-     "y": 493,
-     "w": 30,
-     "h": 24
+     "px": 165,
+     "py": 505
     },
     {
      "mapId": 1452,
      "name": "Winterspring",
-     "x": 313,
-     "y": 183,
-     "w": 44,
-     "h": 34
+     "px": 335,
+     "py": 200
     },
     {
      "mapId": 1453,
      "name": "Stormwind City",
-     "x": 726,
-     "y": 410,
-     "w": 18,
-     "h": 16
+     "px": 735,
+     "py": 418
     },
     {
      "mapId": 1454,
      "name": "Orgrimmar",
-     "x": 268,
-     "y": 300,
-     "w": 18,
-     "h": 16
+     "px": 277,
+     "py": 308
     },
     {
      "mapId": 1455,
      "name": "Ironforge",
-     "x": 747,
-     "y": 330,
-     "w": 18,
-     "h": 16
+     "px": 756,
+     "py": 338
     },
     {
      "mapId": 1456,
      "name": "Thunder Bluff",
-     "x": 189,
-     "y": 334,
-     "w": 18,
-     "h": 16
+     "px": 198,
+     "py": 342
     },
     {
      "mapId": 1457,
      "name": "Darnassus",
-     "x": 141,
-     "y": 104,
-     "w": 18,
-     "h": 16
+     "px": 150,
+     "py": 112
     },
     {
      "mapId": 1458,
      "name": "Undercity",
-     "x": 707,
-     "y": 197,
-     "w": 18,
-     "h": 16
+     "px": 716,
+     "py": 205
     }
    ]
   }
  ],
  "placement": "approximate",
- "note": "The background image (World.png) is a clean, pre-made combined Kalimdor/Eastern Kingdoms world map from https://wowforeveratlas.com/media/forever-maps/azeroth.webp (no UI chrome to remove - it's a purpose-built atlas image, not a client screenshot). The two landmasses' size, shape and relative position are authentic WoW Forever cartography. Zone markers are small boxes hand-placed at each zone's approximate centre on this image's landmasses (no game table places zones on this combined view), so treat positions as approximate."
+ "note": "The background image (World.png) is a clean, pre-made combined Kalimdor/Eastern Kingdoms world map from https://wowforeveratlas.com/media/forever-maps/azeroth.webp (no UI chrome to remove - it's a purpose-built atlas image, not a client screenshot). The two landmasses' size, shape and relative position are authentic WoW Forever cartography. Each zone is placed by one position point (px, py), hand-placed at its approximate centre on this image's landmasses (no game table places zones on this combined view), so treat positions as approximate."
 }

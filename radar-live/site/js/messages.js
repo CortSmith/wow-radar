@@ -9,7 +9,11 @@ export const MSG = Object.freeze({
   worldViewOff: 'Back to zone',
   // Stage 14 W3b: world-map chip hover tooltip (zone name + exact friendly/hostile counts).
   worldChipFriendly: '{n} friendly',
+  worldChipNeutral: '{n} neutral',
   worldChipHostile: '{n} hostile',
+  legendFriendly: 'Friendly',
+  legendNeutral: 'Neutral',
+  legendHostile: 'Hostile',
   zoneLabel: 'Zone',
   noData: 'No contacts in this sector yet.',
   summary: '{n} contacts ({s} stale)',

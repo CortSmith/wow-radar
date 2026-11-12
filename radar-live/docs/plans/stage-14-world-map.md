@@ -127,3 +127,15 @@ Order: W0 -> W1 -> (W2 parallel with W1b-if-needed) -> W3 -> (W4, W5 parallel) -
   W3's first real render.
 - World view is a new "mode" alongside zone/player scope; make sure Escape, the ruleset switch, and the time-zone/chart-picker features
   (which currently assume a concrete `mapId`) don't break when `state.worldView` is true and no single `mapId` is chosen — flag for W6.
+
+## 6. Revision: one pie-chart dot per zone, single position point (supersedes the chip/rectangle parts of 1.2, 3.2, 3.4, 3.5)
+- **Placement:** each zone in `world/index.json` is now a single position point `px`/`py` (continent pixel space) instead of an
+  x/y/w/h rectangle. The rectangles and their outline boxes are gone; `world-map.js` still falls back to the centre of a legacy
+  x/y/w/h rect when a zone has no `px`/`py`. Tracked-player world paths anchor on the same point.
+- **Dot:** one pie per zone with at least one live contact (none when zero), radius `chipRadius(total)` (same sqrt-area sizing and
+  size floor), slices friendly / neutral / hostile clockwise from 12 o'clock, empty buckets skipped, a single bucket a whole disc.
+  Neutral has its own slice colour (`--world-neutral`, amber); the radar and sidebar still treat neutral as red.
+- **Hover:** the zone name plus exact friendly / neutral / hostile counts.
+- **Click:** clicking a pie goes to its zone; the slice under the cursor picks the filter: friendly -> Blue only, hostile or neutral ->
+  Red only (Red covers both, there is no neutral-only filter). A click outside every pie does nothing (no zone-box click any more).
+- A small friendly / neutral / hostile legend sits under the world canvas.
