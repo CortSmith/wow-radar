@@ -58,7 +58,7 @@ async function boot({ withIndex }) {
   const app = createApp(env);
   app.start();
   await timers.advance(0); await settle();
-  const note = doc.querySelector('[data-mount="header-controls"]').find((n) => n.className.includes('mapNote'));
+  const note = doc.querySelector('[data-mount="radar"]').find((n) => n.className.includes('mapNote'));
   return { app, env, timers, urls, note };
 }
 

@@ -85,6 +85,7 @@ function mountVisibility(ctx, worldWrap) {
   const sync = () => {
     if (radarWrap) radarWrap.hidden = ctx.state.worldView;
     worldWrap.hidden = !ctx.state.worldView;
+    ctx.redraw(); // the section that just appeared could not paint while it was hidden
   };
   ctx.bus.on('worldView', sync);
   // W7: see mountToggle's comment above - a zone pick/clear can flip worldView via 'selection' alone.
@@ -124,6 +125,7 @@ function mountContinent(ctx, list, continent) {
   }
 
   function draw() {
+    if (ctx.state.worldView === false) return; // hidden section: it has no size, and the view event repaints on show
     const size = { w: canvas.clientWidth || 600, h: canvas.clientHeight || 280 };
     const frame = frameFor(size);
     const project = continentProjector(w, h, frame, ui.view);
@@ -140,8 +142,10 @@ function mountContinent(ctx, list, continent) {
     const g = canvas.getContext('2d');
     if (!g) return;
     const dpr = (ctx.win && ctx.win.devicePixelRatio) || 1;
-    canvas.width = Math.round(size.w * dpr);
-    canvas.height = Math.round(size.h * dpr);
+    const pw = Math.round(size.w * dpr);
+    const ph = Math.round(size.h * dpr);
+    if (canvas.width !== pw) canvas.width = pw;
+    if (canvas.height !== ph) canvas.height = ph;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, size.w, size.h);
     if (ui.img && ui.img.complete && ui.img.naturalWidth) {
@@ -174,6 +178,7 @@ function mountContinent(ctx, list, continent) {
   wireInput(ctx, canvas, tip, ui);
   if (ctx.win) ctx.win.addEventListener('resize', draw);
   ctx.bus.on('sweep', draw); // re-render chips whenever the roster sweep updates state.contacts
+  ctx.bus.on('view', draw);
   ctx.bus.on('selection', draw); // W4: re-render paths when tracking/untracking/focusing changes state.tracked
   draw();
 }

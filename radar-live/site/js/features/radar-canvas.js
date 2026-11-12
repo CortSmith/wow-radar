@@ -30,6 +30,7 @@ export default {
 
     const colors = readColors(ctx.win, ctx.doc.documentElement || null);
     function draw() {
+      if (wrap.hidden) return; // world view is showing: nothing to paint, and a hidden canvas has no size
       const size = { w: canvas.clientWidth || 800, h: canvas.clientHeight || 600 };
       syncImage(ctx, ui);
       const image = ui.bg && ui.img && ui.img.complete ? { w: ui.img.naturalWidth, h: ui.img.naturalHeight } : null;
@@ -38,14 +39,17 @@ export default {
       const g = canvas.getContext('2d');
       if (!g) return;
       const dpr = (ctx.win && ctx.win.devicePixelRatio) || 1;
-      canvas.width = Math.round(size.w * dpr);
-      canvas.height = Math.round(size.h * dpr);
+      // Resizing a canvas reallocates its pixel buffer, so only do it when the size really changed.
+      const pw = Math.round(size.w * dpr);
+      const ph = Math.round(size.h * dpr);
+      if (canvas.width !== pw) canvas.width = pw;
+      if (canvas.height !== ph) canvas.height = ph;
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       paintScene(g, ui.scene, size, colors, image ? ui.img : null, resolveHoverPoint(ui.scene, ui.hoverKey));
     }
     ui.draw = draw;
     ui.fmtTip = (hit) => tooltipModel(hit, tipCtx(ctx, fmtAge)).join('\n');
-    for (const ev of ['sweep', 'reset', 'selection', 'filters', 'view', 'charts', 'tick']) ctx.bus.on(ev, draw);
+    for (const ev of ['sweep', 'reset', 'selection', 'filters', 'view', 'charts', 'tick', 'worldView']) ctx.bus.on(ev, draw);
     if (ctx.win) ctx.win.addEventListener('resize', draw);
     draw();
   },
@@ -102,14 +106,16 @@ function wireInput(ctx, canvas, tip, ui) {
     // Stage 11 U5: tests both the pips and the drawn trail (history) points, same HIT_RADIUS_PX, pips
     // winning ties - so hovering a historical dot of a tracked player's trail shows a tooltip too.
     const hit = ui.scene ? hitTestScene(ui.scene.pips, ui.scene.trail, m.x, m.y, HIT_RADIUS_PX) : null;
-    ui.hoverKey = hoverKeyFor(hit);
+    const hoverKey = hoverKeyFor(hit);
+    const hoverChanged = hoverKey !== ui.hoverKey;
+    ui.hoverKey = hoverKey;
     tip.hidden = !hit;
     if (hit) {
       tip.textContent = ui.fmtTip(hit);
       tip.style.left = `${m.x + TIP_OFFSET_PX}px`;
       tip.style.top = `${m.y + TIP_OFFSET_PX}px`;
     }
-    ui.draw(); // redraw so the hover ring (and, for a trail point, its neighbour lines) tracks the mouse
+    if (hoverChanged) ui.draw(); // the hover ring (and a trail point's neighbour lines) only change with the hovered item
   });
   canvas.addEventListener('mousedown', (e) => {
     const m = local(e);

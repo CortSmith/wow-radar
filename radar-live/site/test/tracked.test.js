@@ -270,34 +270,20 @@ test('tracked stream populates state.trackedData with {contact, trail} per guid'
   app.stop();
 });
 
-test('a tracked player outside the roster zone still lands in state.contacts via the per-guid merge', async () => {
+test("picking a zone or toggling world view keeps every zone's contacts in state.contacts", async () => {
   const { app, timers } = await boot();
-  // CHARTS[0] = Dun Morogh (mapId 27), CHARTS[1] = Elwynn Forest (mapId 37); demo contacts alternate.
   const outside = [...app.state.contacts.values()].find((c) => c.mapId === 37);
   assert.ok(outside, 'demo data has a contact outside mapId 27');
   app.ctx.setZone({ mapId: 27, name: 'Dun Morogh' });
   await timers.advance(300); await settle();
-  assert.equal(app.state.contacts.has(outside.guid), false, 'the zone-scoped roster sweep excludes it');
+  assert.equal(app.state.contacts.has(outside.guid), true, 'the roster is never narrowed to the zone');
   app.ctx.addPlayer({ guid: outside.guid, name: outside.name });
   await timers.advance(300); await settle();
-  assert.equal(app.state.contacts.has(outside.guid), true, 'the tracked stream merges its own contact back in');
   assert.ok(app.state.trackedData.has(outside.guid));
-  app.stop();
-});
-
-test('W6: setWorldView(true) widens the roster sweep back to all zones, even with a zone still selected', async () => {
-  const { app, timers } = await boot();
-  const outside = [...app.state.contacts.values()].find((c) => c.mapId === 37);
-  assert.ok(outside, 'demo data has a contact outside mapId 27');
-  app.ctx.setZone({ mapId: 27, name: 'Dun Morogh' });
-  await timers.advance(300); await settle();
-  assert.equal(app.state.contacts.has(outside.guid), false, 'zone view: roster sweep is zone-scoped, as before');
   app.ctx.setWorldView(true);
-  await timers.advance(300); await settle();
-  assert.equal(app.state.contacts.has(outside.guid), true, 'world view: roster sweep covers every zone');
   app.ctx.setWorldView(false);
-  await timers.advance(300); await settle();
-  assert.equal(app.state.zone.mapId, 27, 'toggling world view off leaves the selected zone untouched');
+  assert.equal(app.state.zone.mapId, 27, 'toggling world view leaves the selected zone untouched');
+  assert.equal(app.state.contacts.has(outside.guid), true);
   app.stop();
 });
 

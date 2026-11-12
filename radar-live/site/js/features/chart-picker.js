@@ -18,8 +18,9 @@ export default {
     });
     host.appendChild(ctx.el('label', {}, `${MSG.zoneLabel} `, select));
 
+    // An overlay in the radar area, not in the header: showing/hiding it must never move the controls.
     const note = ctx.el('span', { className: 'mapNote muted', text: MSG.noMapImage, hidden: true });
-    host.appendChild(note);
+    (ctx.mount('radar') || host).appendChild(note);
     let mapIndex = null;
     const fill = () => {
       while (select.firstChild) select.removeChild(select.firstChild);

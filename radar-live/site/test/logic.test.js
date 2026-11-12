@@ -63,15 +63,11 @@ test('sectorOf: player beats zone beats all', () => {
   assert.deepEqual(sectorOf({ filters }), { scope: 'all' });
 });
 
-test('W6: rosterSectorOf stays zone-scoped out of worldView, but is always "all" while worldView is true', () => {
-  const filters = { friendly: true, hostile: true };
-  // worldView false (or absent, same as every pre-W6 caller) - zone still scopes the roster sweep.
-  assert.deepEqual(rosterSectorOf({ zone: { mapId: 37 }, filters, worldView: false }), { scope: 'zone', mapId: 37, grp: 'any' });
-  assert.deepEqual(rosterSectorOf({ zone: { mapId: 37 }, filters }), { scope: 'zone', mapId: 37, grp: 'any' });
-  // worldView true - 'all', even with a zone still selected underneath.
+test('rosterSectorOf is always scope=all: zone, world view and filters are applied by the page itself', () => {
+  const filters = { friendly: true, hostile: false };
+  assert.deepEqual(rosterSectorOf({ zone: { mapId: 37 }, filters, worldView: false }), { scope: 'all' });
   assert.deepEqual(rosterSectorOf({ zone: { mapId: 37 }, filters, worldView: true }), { scope: 'all' });
-  // no zone selected either way - 'all'.
-  assert.deepEqual(rosterSectorOf({ zone: null, filters, worldView: false }), { scope: 'all' });
+  assert.deepEqual(rosterSectorOf({ zone: null, filters }), { scope: 'all' });
 });
 
 test('sweepParams builds the contract query', () => {
@@ -226,4 +222,13 @@ test('config: defaults and url override only for maps', () => {
   assert.equal(c.MAPS_BASE_URL, '/m/');
   assert.equal(c.API_BASE, CONFIG.API_BASE);
   assert.equal(c.SWEEP_INTERVAL_MS, 60_000);
+});
+
+test('inViewZone: world view and "All Zones" show everyone, a picked zone only its own contacts', async () => {
+  const { inViewZone } = await import('../js/view-model.js');
+  const c = { mapId: 37 };
+  assert.equal(inViewZone({ worldView: true, zone: { mapId: 27 } }, c), true);
+  assert.equal(inViewZone({ worldView: false, zone: null }, c), true);
+  assert.equal(inViewZone({ worldView: false, zone: { mapId: 27 } }, c), false);
+  assert.equal(inViewZone({ worldView: false, zone: { mapId: 37 } }, c), true);
 });

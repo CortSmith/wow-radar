@@ -19,6 +19,12 @@ export function chooseViewMap(state, now, cfg = CONFIG) {
   return best;
 }
 
+/** True when a contact belongs to the zone view: no zone picked/world view shows everyone, else the picked zone. */
+export function inViewZone(state, contact) {
+  if (state.worldView || !state.zone || !Number.isFinite(state.zone.mapId)) return true;
+  return contact.mapId === state.zone.mapId;
+}
+
 /** Colour class of a contact: friendly blue, hostile/neutral/unknown red, stale grey. */
 export function colorOf(contact, status) {
   if (status === 'stale') return 'stale';

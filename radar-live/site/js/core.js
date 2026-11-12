@@ -262,7 +262,8 @@ export function createApp(env) {
       }
     }
     bus.emit(event);
-    scheduler.requestNow();
+    // Filters and the world/zone view are applied by the page to rows it already holds: no network needed.
+    if (event !== 'filters' && event !== 'worldView') scheduler.requestNow();
   };
 
   const ctx = {

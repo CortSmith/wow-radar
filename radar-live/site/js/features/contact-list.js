@@ -13,13 +13,14 @@
 // (the x replaces that). A header line and a "Show only tracked" checkbox (persisted like group-filter's
 // checkboxes, via ctx.prefs under ctx.config.PREFS_STORAGE) round it out.
 import { visibleContacts, classify } from '../staleness.js';
-import { colorOf } from '../view-model.js';
+import { colorOf, inViewZone } from '../view-model.js';
 import { fmtAge } from '../format.js';
 import { clearNode } from '../dom.js';
 import { trackColorClass } from '../trackcolors.js';
 
 const LIST_ROWS_MAX = 300;
 const ONLY_TRACKED_KEY = 'onlyTracked';
+const AGE_REFRESH_TICKS = 15;
 
 export default {
   name: 'contact-list',
@@ -57,6 +58,7 @@ export default {
       const trackedSize = state.tracked.size;
       const dimEnabled = trackedSize > 0;
       let rows = visibleContacts(state.contacts, now, pinned)
+        .filter((c) => c.guid === pinned || state.tracked.has(c.guid) || inViewZone(state, c))
         .filter((c) => (c.reaction === 'friendly' ? state.filters.friendly : state.filters.hostile))
         .filter((c) => state.filters.stale || classify(c, now) !== 'stale' || c.guid === pinned);
       const total = rows.length;
@@ -81,7 +83,10 @@ export default {
       clearNode(list);
       for (const c of rows) list.appendChild(row(ctx, c, now, pinned, dimEnabled && state.tracked.has(c.guid), dimEnabled));
     }
-    for (const ev of ['sweep', 'reset', 'selection', 'filters', 'tick']) ctx.bus.on(ev, render);
+    for (const ev of ['sweep', 'reset', 'selection', 'filters', 'worldView']) ctx.bus.on(ev, render);
+    // Ages only change slowly: rebuilding up to 300 rows every second made the page laggy.
+    let ticks = 0;
+    ctx.bus.on('tick', () => { ticks += 1; if (ticks % AGE_REFRESH_TICKS === 0) render(); });
     render();
   },
 };

@@ -122,23 +122,19 @@ test('a feature that throws in init is skipped, others keep running', async () =
   assert.equal(env.logs.length, 1);
 });
 
-test('zone and group selection build scope=zone and refresh after the debounce', async () => {
+test('zone and group selection never discard the roster: the page filters what it already has', async () => {
   const { env, timers, requests } = makeEnv(await allFeatures());
   const app = createApp(env);
   app.start();
   await timers.advance(0); await settle();
+  const before = app.state.contacts.size;
+  assert.ok(before > 0);
   app.ctx.setZone({ mapId: 27, name: 'Dun Morogh' });
   app.ctx.setFilters({ hostile: false });
-  await timers.advance(299); await settle();
-  assert.equal(sweeps(requests).length, 1);
-  await timers.advance(1); await settle();
-  const s = sweeps(requests);
-  assert.equal(s.length, 2);
-  assert.equal(s[1].get('scope'), 'zone');
-  assert.equal(s[1].get('mapId'), '27');
-  assert.equal(s[1].get('grp'), 'friendly');
-  assert.equal(s[1].get('since'), '0');
-  assert.ok([...app.state.contacts.values()].every((c) => c.mapId === 27));
+  assert.equal(app.state.contacts.size, before, 'rows are kept immediately, nothing waits for the network');
+  await timers.advance(300); await settle();
+  for (const s of sweeps(requests)) assert.equal(s.get('scope'), 'all');
+  assert.equal(app.state.contacts.size >= before, true);
   app.stop();
 });
 

@@ -33,6 +33,7 @@ async function boot() {
   const app = createApp(env);
   app.start();
   await timers.advance(0); await settle();
+  app.ctx.setWorldView(false); // the radar canvas is only live (and clickable) in zone view
   const radar = doc.querySelector('[data-mount="radar"]');
   const side = doc.querySelector('[data-mount="side-list"]');
   const top = doc.querySelector('[data-mount="side-top"]');
@@ -185,14 +186,14 @@ test('the search clear button deselects', async () => {
   h.app.stop();
 });
 
-test('deselecting returns to the zone scope when a zone is picked', async () => {
+test('deselecting keeps the always-on scope=all roster even when a zone is picked', async () => {
   const h = await boot();
   h.app.ctx.setZone({ mapId: 27, name: 'Dun Morogh' });
   await h.timers.advance(DEBOUNCE_MS); await settle();
   await h.select([...h.app.state.contacts.values()][0]);
   assert.equal(h.sweeps().pop().get('scope'), 'player');
   h.doc.dispatch('keydown', { key: 'Escape' });
-  await expectReverted(h, 'zone');
+  await expectReverted(h, 'all');
   h.app.stop();
 });
 

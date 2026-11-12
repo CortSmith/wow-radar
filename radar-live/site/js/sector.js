@@ -20,18 +20,11 @@ export function sectorOf(state) {
 }
 
 /**
- * Stage 11 U2: the sector for the always-on ROSTER sweep. Unlike sectorOf, this never takes the
- * player branch - state.tracked (and therefore state.player) is irrelevant to the roster stream, so
- * adding/removing a tracked player can never look like a sector change to this function.
+ * The sector for the always-on ROSTER sweep. It is always scope=all: zone, world view, filters and tracked
+ * players are applied by the page itself (view-model.js, contact-list.js, world-map.js), so switching any of
+ * them re-renders instantly from the rows already loaded and never discards them or waits for the network.
  */
-export function rosterSectorOf(state) {
-  // Stage 14 W6: the world map needs every zone's contacts (it draws per-zone friendly/hostile chips
-  // for the whole map), so while state.worldView is true the roster sweep is never narrowed to the
-  // selected zone, even if one is still selected underneath. Zone view (worldView false, the default)
-  // keeps the original U2 behaviour unchanged: a selected zone still scopes the roster sweep to it.
-  if (!state.worldView && state.zone && Number.isFinite(state.zone.mapId)) {
-    return { scope: 'zone', mapId: state.zone.mapId, grp: groupParam(state.filters) };
-  }
+export function rosterSectorOf() {
   return { scope: 'all' };
 }
 

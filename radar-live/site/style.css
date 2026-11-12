@@ -19,24 +19,32 @@ header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-conte
 .controls{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
 .controls label{display:flex;align-items:center;gap:5px;white-space:nowrap}
 .controls select,input[type=password]{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:4px;padding:2px 6px;font:inherit;max-width:190px}
+.controls select{width:190px}
+.controls > button{min-width:92px}
+.status .muted{display:inline-block;min-width:9.5em}
 input[type=range]{width:110px}
 .muted{color:var(--muted)}
 .dot{width:10px;height:10px;border-radius:50%;background:var(--stale);display:inline-block}
 .dot.ok{background:#22c55e}.dot.polling{background:#f59e0b}.dot.error{background:var(--hostile)}
 .btn{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:4px;cursor:pointer;padding:2px 10px;font:inherit}
 .btn:hover{background:#1e2633}
-main{flex:1;display:flex;min-height:0}
+/* Fixed layout: header / main / footer never change size. The radar and the world map share one slot and are
+   swapped with [hidden]; the history table floats over the bottom of that slot instead of pushing it. */
+[hidden]{display:none !important}
+main{flex:1;display:flex;min-height:0;position:relative}
+#below{position:absolute;left:0;bottom:0;right:300px;z-index:4}
+.history{box-shadow:0 -4px 12px #0008}
 #radarWrap{flex:1;position:relative;min-width:0;background:#0a0d12}
 #radarWrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
 .empty{position:absolute;left:0;right:0;top:45%;text-align:center;pointer-events:none}
 .empty[hidden],.tip[hidden],.mapNote[hidden]{display:none}
-.mapNote{font-size:12px}
+.mapNote{position:absolute;left:10px;bottom:8px;z-index:2;font-size:12px;pointer-events:none}
 .tip{position:absolute;pointer-events:none;background:#000c;border:1px solid var(--line);border-radius:4px;padding:4px 8px;white-space:pre;z-index:3}
-#worldWrap{display:flex;flex-direction:column;gap:10px;padding:10px 12px;border-top:1px solid var(--line);background:#0a0d12}
-#worldWrap:empty{display:none}
-.worldContinent{position:relative}
-.worldContinentName{color:var(--muted);font-size:12px;margin-bottom:4px}
-.worldContinent canvas{display:block;width:100%;height:280px;background:#0a0d12;cursor:grab}
+#worldWrap{flex:1;position:relative;min-width:0;display:flex;flex-direction:column;background:#0a0d12}
+.worldList{flex:1;display:flex;flex-direction:column;min-height:0}
+.worldContinent{flex:1;position:relative;min-height:0}
+.worldContinentName{position:absolute;left:10px;top:6px;z-index:2;color:var(--muted);font-size:12px;pointer-events:none}
+.worldContinent canvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:#0a0d12;cursor:grab}
 #side{width:300px;max-width:45%;display:flex;flex-direction:column;background:var(--panel);border-left:1px solid var(--line);min-height:0;margin-left:auto}
 .sidelist{flex:1;display:flex;flex-direction:column;min-height:0}
 .summary{padding:8px 10px;border-bottom:1px solid var(--line)}
