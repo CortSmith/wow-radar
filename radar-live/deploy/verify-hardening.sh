@@ -10,6 +10,9 @@ set -eu
 
 ENV_FILE=/etc/radar-live/radar.env
 ETC_DIR=/etc/radar-live
+SECRETS_DIR=$ETC_DIR/secrets
+ARMORY_ID_FILE=$SECRETS_DIR/armory-client-id
+ARMORY_KEY_FILE=$SECRETS_DIR/armory-api-key
 DATA_DIR=/var/lib/radar-live
 BACKUP_DIR=/var/backups/radar-live
 LOG_DIR=/var/log/radar
@@ -109,6 +112,39 @@ if have systemctl; then
             fi
         fi
     done
+    # radar-armory (optional oneshot started by radar-armory.timer): same sandbox, writes only its log dir.
+    if [ -f /etc/systemd/system/radar-armory.service ]; then
+        unit=radar-armory.service
+        for kv in NoNewPrivileges=yes ProtectSystem=strict ProtectHome=yes PrivateTmp=yes PrivateDevices=yes \
+            ProtectKernelTunables=yes ProtectKernelModules=yes ProtectKernelLogs=yes ProtectControlGroups=yes \
+            ProtectClock=yes ProtectHostname=yes ProtectProc=invisible ProcSubset=pid RestrictNamespaces=yes \
+            RestrictRealtime=yes RestrictSUIDSGID=yes LockPersonality=yes MemoryDenyWriteExecute=yes \
+            SystemCallArchitectures=native UMask=0077 User=$SVC_USER; do
+            check_prop "$unit" "${kv%%=*}" "${kv#*=}"
+        done
+        check_prop "$unit" CapabilityBoundingSet ""
+        check_prop "$unit" AmbientCapabilities ""
+        check_prop "$unit" RestrictAddressFamilies "AF_INET AF_INET6 AF_UNIX"
+        check_limited "$unit" MemoryMax
+        check_limited "$unit" TasksMax
+        rw=$(prop "$unit" ReadWritePaths)
+        if [ -z "$rw" ]; then pass "radar-armory has no writable path"; else fail "radar-armory ReadWritePaths='$rw'"; fi
+        if [ "$(systemctl is-enabled radar-armory.timer 2>/dev/null || true)" = enabled ]; then
+            pass "radar-armory.timer is enabled"
+            check_prop radar-armory.timer Unit radar-armory.service
+            cal=$(systemctl show -p TimersCalendar --value radar-armory.timer 2>/dev/null || true)
+            case $cal in
+                *"00:00:00"*) pass "radar-armory.timer OnCalendar is midnight (systemctl list-timers radar-armory.timer shows the next run)" ;;
+                *) fail "radar-armory.timer OnCalendar is not midnight ('$cal')" ;;
+            esac
+            if [ -f "$ARMORY_ID_FILE" ]; then pass "armory timer has its client id file"; else fail "armory timer is enabled but $ARMORY_ID_FILE is missing"; fi
+            if [ -f "$ARMORY_KEY_FILE" ]; then pass "armory timer has its client secret file"; else fail "armory timer is enabled but $ARMORY_KEY_FILE is missing"; fi
+        else
+            skip "radar-armory.timer is not enabled (armory sync is optional: docs/armory.md)"
+        fi
+    else
+        skip "radar-armory.service is not installed"
+    fi
     # Only radar-db may write: radar-ingest must not list ReadWritePaths.
     rw=$(prop radar-ingest.service ReadWritePaths)
     if [ -z "$rw" ]; then pass "radar-ingest has no writable path"; else fail "radar-ingest ReadWritePaths='$rw'"; fi
@@ -143,6 +179,11 @@ check_stat "$LOG_DIR" "700 $SVC_USER $SVC_USER" "log dir"
 for bin in /usr/local/bin/radar-db /usr/local/bin/radar-ingest; do
     check_stat "$bin" "755 root root" "binary"
 done
+if [ -e /usr/local/bin/radar-armory ]; then check_stat /usr/local/bin/radar-armory "755 root root" "binary"; fi
+# Armory client id and secret files: only mode and owner are checked, the files are never read.
+if [ -d "$SECRETS_DIR" ]; then check_stat "$SECRETS_DIR" "750 root $SVC_USER" "secrets dir"; fi
+if [ -e "$ARMORY_KEY_FILE" ]; then check_stat "$ARMORY_KEY_FILE" "640 root $SVC_USER" "armory client secret file"; fi
+if [ -e "$ARMORY_ID_FILE" ]; then check_stat "$ARMORY_ID_FILE" "640 root $SVC_USER" "armory client id file"; fi
 for f in "$DATA_DIR"/*.db "$DATA_DIR"/abuse-bans.json "$LOG_DIR"/security*.log; do
     [ -e "$f" ] || continue
     mode=$(stat -c '%a' "$f")

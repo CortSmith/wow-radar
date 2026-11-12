@@ -73,13 +73,15 @@ func (m *Module) Init(host *core.Host) error {
 		}
 	}
 	routes := map[string]call{
-		"/api/v1/sweep":         m.sweep,
-		"/api/v1/contacts":      m.contacts,
-		"/api/v1/trail":         m.trail,
-		"/api/v1/bounty":        m.bounty,
-		"/api/v1/bounty/player": m.bountyPlayer,
-		"/api/v1/charts":        m.charts,
-		"/api/v1/status":        m.status,
+		"/api/v1/sweep":             m.sweep,
+		"/api/v1/contacts":          m.contacts,
+		"/api/v1/trail":             m.trail,
+		"/api/v1/bounty":            m.bounty,
+		"/api/v1/bounty/player":     m.bountyPlayer,
+		"/api/v1/charts":            m.charts,
+		"/api/v1/status":            m.status,
+		"/api/v1/armory/character":  m.armoryCharacter,
+		"/api/v1/armory/characters": m.armoryCharacters,
 	}
 	for path, fn := range routes {
 		guarded := host.Auth.Require(core.RoleView, http.HandlerFunc(m.handler(fn)))

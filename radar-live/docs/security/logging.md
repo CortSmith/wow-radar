@@ -44,7 +44,7 @@ refuses is summed into an `audit_overflow` line. The counters in `/internal/metr
 | `rate_limited` | ratelimit | `ip_budget`, `key_budget`, `authfail_budget` | 429 from a token bucket; `class` is the budget's class |
 | `conn_refused` | limits | `conn_cap` | connection closed at the connection cap |
 | `overloaded` | limits | `inflight_cap` | 503 at the in-flight cap |
-| `validation_reject` | readapi, writeapi | `query_invalid`, `ping_invalid`, `ping_too_large` | a spike of these from one address shows as a large `count` |
+| `validation_reject` | readapi, writeapi | `query_invalid`, `ping_invalid`, `ping_too_large`, `armory_invalid`, `armory_too_large` | a spike of these from one address shows as a large `count` |
 | `stream_refused` | streamapi | `source_busy`, `too_many_streams`, `too_many_streams_key`, `too_many_sources`, `rate` | ingest connection refused |
 | `integrity_degraded` | sqlstore | `quick_check`, `integrity_check` | writes now get 503; restore a backup |
 | `disk_full` | sqlstore | `disk_low`, `size_cap` | writes now get 507; clears by itself |

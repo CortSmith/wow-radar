@@ -20,6 +20,11 @@ umask 077
 BIN_DIR=/usr/local/bin
 ETC_DIR=/etc/radar-live
 ENV_FILE=$ETC_DIR/radar.env
+# Secrets that do not belong in radar.env (read by every radar service): the two armory secret files live here.
+# armory-client-id holds the Battle.net client id, armory-api-key the client SECRET (WOW_ARMORY_API_KEY).
+SECRETS_DIR=$ETC_DIR/secrets
+ARMORY_ID_FILE=$SECRETS_DIR/armory-client-id
+ARMORY_KEY_FILE=$SECRETS_DIR/armory-api-key
 DATA_DIR=/var/lib/radar-live
 MAPS_DIR=$DATA_DIR/maps
 BACKUP_DIR=/var/backups/radar-live
@@ -93,7 +98,7 @@ if [ -z "$arch" ]; then
 fi
 case $arch in amd64 | arm64) ;; *) die "--arch must be amd64 or arm64" ;; esac
 
-files="radar-db-linux-$arch radar-ingest-linux-$arch radar.env.example radar-db.service radar-ingest.service"
+files="radar-db-linux-$arch radar-ingest-linux-$arch radar-armory-linux-$arch radar.env.example radar-db.service radar-ingest.service radar-armory.service radar-armory.timer"
 [ -z "$ufw_cidr" ] || files="$files ufw-setup.sh"
 for f in $files; do
     [ -f "$src/$f" ] || die "missing $src/$f (copy the whole dist folder)"
@@ -137,6 +142,7 @@ install -d -o "$SVC_USER" -g "$SVC_USER" -m 0700 "$DATA_DIR"
 install -d -o "$SVC_USER" -g "$SVC_USER" -m 0700 "$BACKUP_DIR"
 install -d -o "$SVC_USER" -g "$SVC_USER" -m 0700 "$LOG_DIR"
 install -d -o root -g "$SVC_USER" -m 0750 "$ETC_DIR"
+install -d -o root -g "$SVC_USER" -m 0750 "$SECRETS_DIR"
 install -d -m 0755 "$DOC_DIR"
 # Zone maps: owned by root, so the service (user radar) can read them but never change them.
 install -d -o root -g root -m 0755 "$MAPS_DIR"
@@ -148,6 +154,7 @@ install_bin() {
 }
 install_bin radar-db
 install_bin radar-ingest
+install_bin radar-armory
 
 if [ -n "$map_files" ]; then
     echo "installing zone maps into $MAPS_DIR"
@@ -181,9 +188,18 @@ else
     new_keys=yes
 fi
 install -m 0644 "$src/radar.env.example" "$ETC_DIR/radar.env.example"
-for doc in README-xubuntu.md backup.cron ufw-setup.sh verify-hardening.sh; do
+for doc in README-xubuntu.md backup.cron ufw-setup.sh verify-hardening.sh armory.md; do
     if [ -f "$src/$doc" ]; then install -m 0644 "$src/$doc" "$DOC_DIR/$doc"; fi
 done
+# The armory secret files, when the operator has put them there: only mode and owner are asserted (never the contents).
+if [ -f "$ARMORY_KEY_FILE" ]; then
+    chown root:"$SVC_USER" "$ARMORY_KEY_FILE"
+    chmod 0640 "$ARMORY_KEY_FILE"
+fi
+if [ -f "$ARMORY_ID_FILE" ]; then
+    chown root:"$SVC_USER" "$ARMORY_ID_FILE"
+    chmod 0640 "$ARMORY_ID_FILE"
+fi
 
 # systemd units.
 if ! command -v systemctl >/dev/null 2>&1; then
@@ -196,6 +212,22 @@ systemctl daemon-reload
 systemctl enable radar-db.service radar-ingest.service >/dev/null 2>&1
 if [ "$start" = yes ]; then
     systemctl restart radar-db.service radar-ingest.service
+fi
+
+# Armory sync (docs/armory.md): the units are always installed; the TIMER is enabled only when BOTH secret files (client
+# id and client secret) exist and radar.env names the db key. Otherwise nothing runs and the steps are printed.
+# RADAR_ARMORY_DEFAULT_REALM is only advised (seeds without a realm are skipped without it), never required.
+install -m 0644 "$src/radar-armory.service" "$UNIT_DIR/radar-armory.service"
+install -m 0644 "$src/radar-armory.timer" "$UNIT_DIR/radar-armory.timer"
+systemctl daemon-reload
+armory_timer=no
+armory_missing=""
+[ -f "$ARMORY_ID_FILE" ] || armory_missing="$armory_missing the client id file $ARMORY_ID_FILE;"
+[ -f "$ARMORY_KEY_FILE" ] || armory_missing="$armory_missing the client secret file $ARMORY_KEY_FILE;"
+grep -Eq '^RADAR_ARMORY_DB_KEY(_FILE)?=[^[:space:]]' "$ENV_FILE" || armory_missing="$armory_missing RADAR_ARMORY_DB_KEY in $ENV_FILE;"
+if [ -f "$ARMORY_KEY_FILE" ] && [ -f "$ARMORY_ID_FILE" ] && [ -z "$armory_missing" ]; then
+    systemctl enable --now radar-armory.timer >/dev/null 2>&1
+    armory_timer=yes
 fi
 
 # Optional: firewall. ufw-setup.sh validates the network and never opens 8788/8789.
@@ -232,6 +264,16 @@ echo "  status:   systemctl status radar-db radar-ingest"
 echo "  logs:     journalctl -u radar-db -u radar-ingest -f"
 echo "  settings: $ENV_FILE"
 echo "  audit:    sudo sh $DOC_DIR/verify-hardening.sh"
+if [ "$armory_timer" = yes ]; then
+    echo "  armory:   nightly sync enabled (systemctl list-timers radar-armory.timer; guide: $DOC_DIR/armory.md)"
+else
+    echo "  armory:   nightly sync NOT enabled yet; still missing:${armory_missing%;}"
+    echo "            guide: $DOC_DIR/armory.md (type the client id and secret hidden, then run install.sh again"
+    echo "            or: sudo systemctl enable --now radar-armory.timer)"
+fi
+if [ "$armory_timer" = yes ] && ! grep -Eq '^RADAR_ARMORY_DEFAULT_REALM=[^[:space:]]' "$ENV_FILE"; then
+    echo "            note: RADAR_ARMORY_DEFAULT_REALM is not set in $ENV_FILE; seeds without a realm are skipped"
+fi
 if [ "$new_keys" = yes ]; then
     echo
     echo "Keys were generated just now on this host. They are shown only here; they are also stored in $ENV_FILE"

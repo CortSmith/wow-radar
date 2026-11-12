@@ -1,6 +1,7 @@
 #!/bin/sh
 # Removes the radar-live services and binaries. Run as root:   sudo sh uninstall.sh [--purge]
 # Without --purge the database (/var/lib/radar-live), backups, settings/keys (/etc/radar-live)
+# (including the armory client id and secret files in /etc/radar-live/secrets)
 # and the radar user are kept, so a later install.sh brings everything back.
 # --purge deletes all of those too, plus the security log (/var/log/radar).
 # Firewall rules (ufw) are never touched; undo them with the ROLLBACK lines in ufw-setup.sh.
@@ -21,13 +22,13 @@ esac
 }
 
 if command -v systemctl >/dev/null 2>&1; then
-    for unit in radar-ingest.service radar-db.service; do
+    for unit in radar-armory.timer radar-armory.service radar-ingest.service radar-db.service; do
         systemctl disable --now "$unit" >/dev/null 2>&1 || true
         rm -f "/etc/systemd/system/$unit"
     done
     systemctl daemon-reload
 fi
-rm -f /usr/local/bin/radar-db /usr/local/bin/radar-ingest /usr/local/bin/radar-db.new /usr/local/bin/radar-ingest.new
+rm -f /usr/local/bin/radar-db /usr/local/bin/radar-ingest /usr/local/bin/radar-armory /usr/local/bin/radar-db.new /usr/local/bin/radar-ingest.new /usr/local/bin/radar-armory.new
 rm -rf /usr/local/share/doc/radar-live
 # fail2ban filter and jail shipped by install.sh --with-fail2ban (harmless when absent).
 if [ -f /etc/fail2ban/jail.d/radar-live.local ] || [ -f /etc/fail2ban/filter.d/radar-live.conf ]; then

@@ -49,6 +49,28 @@ func (s *Store) pruneIDsKeep(ctx context.Context, halve bool) error {
 			}
 		}
 	}
+	return s.pruneArmory(ctx, halve)
+}
+
+// pruneArmory keeps the newest armory batch ids and run summaries (the newer half when halve) and
+// drops snapshots older than the retention window. Current character rows are never pruned.
+func (s *Store) pruneArmory(ctx context.Context, halve bool) error {
+	keepBatches, keepRuns := armoryBatchesKeptMax, armoryRunsKeptMax
+	if halve {
+		keepBatches, keepRuns = keepBatches/2, keepRuns/2
+	}
+	if _, err := s.writer.ExecContext(ctx, `DELETE FROM armory_batches WHERE seq <= (
+		SELECT seq FROM armory_batches ORDER BY seq DESC LIMIT 1 OFFSET ?)`, keepBatches); err != nil {
+		return fmt.Errorf("sqlstore: prune armory batches: %w", err)
+	}
+	if _, err := s.writer.ExecContext(ctx, `DELETE FROM armory_runs WHERE started_at < (
+		SELECT started_at FROM armory_runs ORDER BY started_at DESC, id DESC LIMIT 1 OFFSET ?)`, keepRuns-1); err != nil {
+		return fmt.Errorf("sqlstore: prune armory runs: %w", err)
+	}
+	cut := domain.ArmoryDay(s.nowMs()) - armorySnapshotKeepDays
+	if _, err := s.writer.ExecContext(ctx, `DELETE FROM armory_snapshots WHERE day < ?`, cut); err != nil {
+		return fmt.Errorf("sqlstore: prune armory snapshots: %w", err)
+	}
 	return nil
 }
 

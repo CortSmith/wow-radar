@@ -1,6 +1,6 @@
 #!/bin/sh
 # Cross-compiles radar-live into dist/ (static binaries, no cgo) and writes SHA256SUMS.
-#   radar-db, radar-ingest: linux/amd64 and linux/arm64
+#   radar-db, radar-ingest, radar-armory: linux/amd64 and linux/arm64
 #   radar-feed:             windows/amd64 and linux/amd64
 #   radar-client:           windows/amd64 (windowed exe, no console) and linux/amd64 (console + browser)
 # The deploy/ files are copied next to the binaries so dist/ is everything to scp to the laptop.
@@ -42,6 +42,8 @@ build radar-db linux amd64
 build radar-db linux arm64
 build radar-ingest linux amd64
 build radar-ingest linux arm64
+build radar-armory linux amd64
+build radar-armory linux arm64
 build radar-feed windows amd64
 build radar-feed linux amd64
 build radar-client windows amd64 -H=windowsgui
@@ -51,6 +53,8 @@ for f in deploy/*; do
     case "$f" in *_test.go) continue ;; esac
     [ -f "$f" ] && cp "$f" "$dist/"
 done
+# The armory guide is installed next to the other docs (install.sh -> /usr/local/share/doc/radar-live).
+cp docs/armory.md "$dist/armory.md"
 # The fail2ban filter and jail go in a sub-folder (used by install.sh --with-fail2ban).
 if [ -d deploy/fail2ban ]; then
     mkdir -p "$dist/fail2ban"

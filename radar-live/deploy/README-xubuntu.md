@@ -191,3 +191,23 @@ sudo sh /usr/local/share/doc/radar-live/verify-hardening.sh         # PASS/FAIL 
 
 Ports 8788 and 8789 are never opened. Roll the firewall back with `sudo ufw disable`. `fail2ban/` must sit next to
 `install.sh` for `--with-fail2ban` (copy the `deploy/fail2ban` folder along with `dist/`).
+
+## 10. Armory sync (optional, nightly)
+
+`radar-armory.timer` runs `radar-armory.service` once a night at 00:00 (laptop local time). It asks the Battle.net WoW Classic
+Profile API (OAuth2 client credentials) for the characters radar-db already knows (known contacts, then guilds seen in stored
+armory data) and stores level, gear, talents, PvP, ... in radar-db. `install.sh` installs the binary, the service and the timer
+and creates `/etc/radar-live/secrets` (0750 root:radar), but enables the timer only when BOTH
+`/etc/radar-live/secrets/armory-client-id` and `/etc/radar-live/secrets/armory-api-key` (the client secret) exist and `radar.env`
+has `RADAR_ARMORY_DB_KEY`. Without them it prints what is missing and nothing runs. Set `RADAR_ARMORY_DEFAULT_REALM` (realm slug)
+in `radar.env` so contacts without a realm are not skipped.
+
+```sh
+systemctl list-timers radar-armory.timer       # next run
+sudo systemctl start radar-armory              # run now
+journalctl -u radar-armory -n 30 --no-pager    # one-line summary, exit 0 ok / 1 partial / 2 fatal
+```
+
+Both values are typed hidden into their files, never put in `radar.env` or on a command line. The full guide (how to get a
+client id and secret, hidden-typing recipe, rotation, 401/403/429/507 troubleshooting, what is stored, the provisional API shape) is `docs/armory.md`, installed as
+`/usr/local/share/doc/radar-live/armory.md`. The nightly backup (03:17) may overlap a long run; that is safe.

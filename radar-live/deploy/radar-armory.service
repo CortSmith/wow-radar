@@ -1,0 +1,67 @@
+[Unit]
+Description=radar-live armory sync (one run: crawl the WoW Forever armory -> radar-db)
+Documentation=file:///usr/local/share/doc/radar-live/armory.md
+After=network-online.target radar-db.service
+Wants=network-online.target radar-db.service
+
+[Service]
+# One-shot: started by radar-armory.timer at 00:00, runs to completion, exits. Never enabled on its own.
+Type=oneshot
+User=radar
+Group=radar
+EnvironmentFile=/etc/radar-live/radar.env
+# Settings (RADAR_ARMORY_*) and the key file PATH (WOW_ARMORY_API_KEY_FILE) come from radar.env. The key itself is
+# in /etc/radar-live/secrets/armory-api-key (0640 root:radar), never in this unit, never on a command line.
+# The database is reached through radar-db's INTERNAL listener (RADAR_ARMORY_DB_URL, default http://127.0.0.1:8789).
+ExecStart=/usr/local/bin/radar-armory
+WorkingDirectory=/
+# Exit codes: 0 ok, 1 partial (some characters failed, run budget hit, or interrupted), 2 fatal (key refused, bad
+# settings). No SuccessExitStatus on purpose: exit 1 and 2 both leave the unit "failed", so `systemctl --failed` and
+# `systemctl status radar-armory` show it. No Restart: the next run is tomorrow's timer (a half-done run resumes the
+# same local day when started by hand again). There is no OnFailure= hook: the existing alert hook (RADAR_ALERT_CMD)
+# lives inside radar-db/radar-ingest, so use `journalctl -u radar-armory` or `systemctl --failed`.
+# 6h = default RADAR_ARMORY_MAX_RUNTIME, plus 30 minutes for the final checkpoint. If you raise the runtime, raise this too.
+TimeoutStartSec=6h 30min
+TimeoutStopSec=30
+
+# Writes nothing but its own log directory (/var/log/radar); never touches the database directory.
+LogsDirectory=radar
+LogsDirectoryMode=0700
+
+LimitNOFILE=1024
+MemoryHigh=96M
+MemoryMax=128M
+TasksMax=128
+CPUQuota=100%
+# Be polite to the website running on the same weak laptop.
+Nice=10
+
+# Sandbox: same as radar-ingest (outbound HTTPS to the armory, loopback HTTP to radar-db).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+RemoveIPC=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+KeyringMode=private
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+UMask=0077

@@ -20,12 +20,14 @@ const (
 
 // Allowed parameter names per route; anything else is a 400.
 var (
-	sweepParams    = []string{"rs", "scope", "guid", "mapId", "grp", "q", "since", "activeWithin", "trail"}
-	contactsParams = []string{"rs", "q", "mapId", "grp", "limit", "offset"}
-	trailParams    = []string{"rs", "guid", "mapId"}
-	bountyParams   = []string{"rs", "limit"}
-	playerParams   = []string{"rs", "guid"}
-	chartsParams   = []string{"rs"}
+	sweepParams      = []string{"rs", "scope", "guid", "mapId", "grp", "q", "since", "activeWithin", "trail"}
+	contactsParams   = []string{"rs", "q", "mapId", "grp", "limit", "offset"}
+	trailParams      = []string{"rs", "guid", "mapId"}
+	bountyParams     = []string{"rs", "limit"}
+	playerParams     = []string{"rs", "guid"}
+	chartsParams     = []string{"rs"}
+	armoryOneParams  = []string{"realm", "name"}
+	armoryManyParams = []string{"realm", "names"}
 )
 
 // params parses the query through the central validate layer; the first error sticks.

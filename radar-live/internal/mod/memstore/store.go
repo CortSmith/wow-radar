@@ -52,6 +52,7 @@ type Store struct {
 	now        func() time.Time
 	mu         sync.RWMutex
 	partitions map[domain.Ruleset]*partition
+	armory     armoryData // optional core.ArmoryStore state, see armory.go
 }
 
 // New creates an empty store. now supplies the clock; nil means time.Now.

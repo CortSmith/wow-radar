@@ -7,7 +7,40 @@ import (
 )
 
 // migrations[i] upgrades a database from user_version i to i+1. Append only; never edit a shipped step.
-var migrations = []string{schemaV1}
+var migrations = []string{schemaV1, schemaV2}
+
+// schemaV2 adds the armory tables (stage 15). Keys are case-folded (realm_lc, name_lc); the display
+// forms and the JSON blobs (gear, talents, stats, pvp; ” = none) are plain TEXT, size-capped in domain.
+const schemaV2 = `
+CREATE TABLE armory_characters (
+  realm_lc TEXT NOT NULL, name_lc TEXT NOT NULL, realm TEXT NOT NULL, name TEXT NOT NULL,
+  guid_link TEXT,
+  class TEXT NOT NULL, race TEXT NOT NULL, faction TEXT NOT NULL, level INTEGER NOT NULL, guild TEXT NOT NULL,
+  health INTEGER NOT NULL, power_type TEXT NOT NULL, power INTEGER NOT NULL,
+  gear TEXT NOT NULL, talents TEXT NOT NULL, stats TEXT NOT NULL, pvp TEXT NOT NULL,
+  api_updated_at INTEGER, fetched_at INTEGER NOT NULL, status TEXT NOT NULL,
+  PRIMARY KEY (realm_lc, name_lc)
+) WITHOUT ROWID;
+CREATE INDEX armory_realm_class ON armory_characters (realm_lc, class);
+CREATE INDEX armory_guild ON armory_characters (guild);
+CREATE INDEX armory_fetched ON armory_characters (fetched_at);
+CREATE TABLE armory_snapshots (
+  realm_lc TEXT NOT NULL, name_lc TEXT NOT NULL, day INTEGER NOT NULL,
+  level INTEGER NOT NULL, gear_hash TEXT NOT NULL, pvp TEXT NOT NULL,
+  PRIMARY KEY (realm_lc, name_lc, day)
+) WITHOUT ROWID;
+CREATE INDEX armory_snapshots_day ON armory_snapshots (day);
+CREATE TABLE armory_batches (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT, batch_id TEXT NOT NULL UNIQUE, applied_at INTEGER NOT NULL
+);
+CREATE TABLE armory_runs (
+  id TEXT PRIMARY KEY, started_at INTEGER NOT NULL, finished_at INTEGER NOT NULL,
+  enumerated INTEGER NOT NULL DEFAULT 0, fetched INTEGER NOT NULL DEFAULT 0, stored INTEGER NOT NULL DEFAULT 0,
+  skipped INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT '', cursor TEXT NOT NULL DEFAULT ''
+) WITHOUT ROWID;
+CREATE INDEX armory_runs_started ON armory_runs (started_at);
+`
 
 const schemaV1 = `
 CREATE TABLE contacts (

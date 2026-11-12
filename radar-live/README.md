@@ -27,7 +27,7 @@ package and its one line in `cmd/*/modules.go`; an architecture test keeps modul
 | `sqlstore` / `memstore` | radar-db | SQLite store (default) / in-memory store (tests, `--store memstore`) |
 | `keys` | both | view and ingest API keys |
 | `readapi` | radar-db | `/api/v1/*` for the page |
-| `writeapi` | radar-db | `/internal/v1/ping`, called by ingest |
+| `writeapi` | radar-db | `/internal/v1/ping`, called by ingest; `/internal/v1/armory/*`, called by radar-armory |
 | `static` | radar-db | the embedded web page (`site/`) |
 | `logparse`, `contactx`, `bountyx` | radar-ingest | lines -> events -> contacts / bounty credits |
 | `streamapi` | radar-ingest | `/v1/stream`, `/v1/lines`, `/v1/sources` |
@@ -171,7 +171,12 @@ Auth: `X-View-Key` for reads, `X-Ingest-Key` for writes. Errors: `{"error":"<cod
 | `GET /api/v1/bounty?rs=&limit=`, `/bounty/player?rs=&guid=` | bounty ranking |
 | `GET /api/v1/charts?rs=` | map rectangles seen |
 | `GET /api/v1/status` | version, per-ruleset counts, uptime |
+| `GET /api/v1/armory/character?realm=&name=` | one armory character (404 if unknown or the store has no armory data) |
+| `GET /api/v1/armory/characters?realm=&names=a,b,...` | up to 100 characters of one realm: `{"characters":[...]}` in request order, unknown names omitted |
 | `POST /internal/v1/ping` | ingest -> db (idempotent per `batchId`) |
+| `POST /internal/v1/armory/batch` | armory sync -> db: `{batchId, runId, characters[<=100], cursor}`, answers `{duplicate, stored, skipped}` (idempotent per `batchId`; ingest role; 404 without armory store) |
+| `POST /internal/v1/armory/run`, `GET /internal/v1/armory/run` | armory sync run summary / resume checkpoint: record one run, read the latest (404 if none) |
+| `GET /internal/v1/armory/seeds?cursor=&limit=` | crawl seed feed for radar-armory (ingest role, 404 without the optional store interface): `{"items":[{"kind":"character","realm","name"},{"kind":"guild","realm","guild"}],"next":""}`; player contacts of all rulesets (de-duplicated, realm from the `Name-Realm` raw suffix or empty), then distinct stored guilds; keyset cursor (opaque, <=256 chars), limit 1..500 (default 200) |
 | `POST /v1/stream?source=&rs=` | ingest: held-open raw log lines; answers a summary when it ends |
 | `POST /v1/lines?source=&rs=` | ingest: one batch of lines |
 | `GET /v1/sources` | ingest: live connections |

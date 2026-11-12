@@ -15,6 +15,17 @@ combat log or a real database, personal paths such as `C:\Users\<name>\...`.
 - Names: `RADAR_VIEW_KEYS`, `RADAR_INGEST_KEYS`, `RADAR_DB_KEY` (relay -> db), `RADAR_INGEST_KEY` (client/feeder -> ingest),
   `RADAR_CLIENT_*` for the desktop client, `RADAR_TUNNEL_TOKEN` for tunnels. Flags that would take a secret on the command line are
   not offered (command lines leak through process lists); the env var is the only way. Non-secret settings may still use flags.
+- **Documented exception (stage 15, radar-armory):** the Battle.net credentials use user-mandated names without the `RADAR_` prefix:
+  `WOW_ARMORY_API_KEY` (holds the OAuth2 client secret) and `WOW_ARMORY_CLIENT_ID` (the client id, also treated as a secret), with the
+  path variants `WOW_ARMORY_API_KEY_FILE` and `WOW_ARMORY_CLIENT_ID_FILE`. These two are the only such names. The short-lived bearer token
+  obtained from them lives in memory only and is never stored or logged. Every other armory setting follows the
+  rule: `RADAR_ARMORY_DB_KEY` (the ingest-role key radar-armory sends to radar-db; must be one of `RADAR_INGEST_KEYS`) and
+  `RADAR_ARMORY_DB_KEY_FILE`, plus the non-secret `RADAR_ARMORY_*` settings. As for all secrets: env or `*_FILE` path only, no flag
+  (`--api-key`, `--client-id`, `--client-secret`, `--db-key` are refused), values redacted everywhere, never in `radar.env.example`
+  (only the file paths), files `/etc/radar-live/secrets/armory-client-id` and `/etc/radar-live/secrets/armory-api-key` mode 0640
+  root:radar created on the host by hand (docs/armory.md). The repo scan flags a long value assigned to `WOW_ARMORY_API_KEY` (its
+  key/secret/token rule); a plain `WOW_ARMORY_CLIENT_ID=<value>` is not a key-shaped name and is covered by the deploy test that
+  forbids assigning either variable in `radar.env.example`, not by the scanner.
 - Example configuration lives in `deploy/radar.env.example` with **placeholders only** (`CHANGE_ME`), never working values.
   `.env`-style files are git-ignored (see `.gitignore`); only `*.example` files are tracked.
 - Keys are generated on the host (`radar-db keygen`), shown once, stored hashed in memory only, never written to logs.

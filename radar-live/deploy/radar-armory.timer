@@ -1,0 +1,16 @@
+[Unit]
+Description=radar-live armory sync, daily at midnight (server local time)
+Documentation=file:///usr/local/share/doc/radar-live/armory.md
+
+[Timer]
+# Midnight in the host's time zone (timedatectl). Check: systemd-analyze calendar '*-*-* 00:00:00'
+# Persistent: when the laptop was off at 00:00, the missed run starts at the next boot.
+# The nightly backup (backup.cron, 03:17) starts hours later; a long armory run may overlap it, which is safe
+# (the backup is a consistent VACUUM INTO copy), see docs/armory.md.
+OnCalendar=*-*-* 00:00:00
+Persistent=true
+RandomizedDelaySec=0
+Unit=radar-armory.service
+
+[Install]
+WantedBy=timers.target

@@ -20,6 +20,10 @@ import (
 const (
 	ModuleName = "writeapi"
 	PingPath   = "/internal/v1/ping"
+	// ArmoryBatchPath and ArmoryRunPath are the armory sync routes (see armory.go).
+	ArmoryBatchPath = "/internal/v1/armory/batch"
+	ArmoryRunPath   = "/internal/v1/armory/run"
+	ArmorySeedsPath = "/internal/v1/armory/seeds"
 	// SettingInternalListen is the loopback listener the write API is served on.
 	SettingInternalListen = "internal-listen"
 	defaultInternalListen = "127.0.0.1:8789"
@@ -60,31 +64,31 @@ func (m *Module) Init(host *core.Host) error {
 	if err := host.Routes.HandleFuncOn(core.ClassInternal, http.MethodPost, PingPath, guarded.ServeHTTP); err != nil {
 		return fmt.Errorf("writeapi: %w", err)
 	}
-	return nil
+	return m.initArmory()
 }
 
 func (m *Module) ping(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	ping, err := m.decode(w, r)
 	if err != nil {
-		m.fail(w, r, err)
+		m.fail(w, r, "ping", err)
 		return
 	}
 	if n := ping.Sanitize(); n > 0 {
 		m.host.Log.Debug("ping text repaired", slog.String("batch", ping.BatchID), slog.Int("repairs", n))
 	}
 	if err := ping.ValidateAt(m.now()); err != nil {
-		m.fail(w, r, err)
+		m.fail(w, r, "ping", err)
 		return
 	}
 	st, err := m.host.Stores.Default()
 	if err != nil {
-		m.fail(w, r, fmt.Errorf("default store: %w", err))
+		m.fail(w, r, "ping", fmt.Errorf("default store: %w", err))
 		return
 	}
 	res, err := st.ApplyPing(r.Context(), ping)
 	if err != nil {
-		m.fail(w, r, err)
+		m.fail(w, r, "ping", err)
 		return
 	}
 	if !res.Duplicate {
@@ -99,7 +103,7 @@ func (m *Module) decode(w http.ResponseWriter, r *http.Request) (domain.Ping, er
 	body := http.MaxBytesReader(w, r.Body, int64(m.host.Config.Int(core.SettingMaxBody)))
 	var ping domain.Ping
 	if err := validate.DecodeJSON(body, &ping, validate.JSONLimits{MaxArray: domain.PingMaxFixesPerContact}); err != nil {
-		return ping, wrapBody(err)
+		return ping, wrapBody(err, "ping")
 	}
 	return ping, nil
 }
@@ -107,16 +111,16 @@ func (m *Module) decode(w http.ResponseWriter, r *http.Request) (domain.Ping, er
 // errTooLarge marks a body over the cap.
 var errTooLarge = errors.New("request body too large")
 
-func wrapBody(err error) error {
+func wrapBody(err error, what string) error {
 	var tooBig *http.MaxBytesError
 	if errors.As(err, &tooBig) {
 		return errTooLarge
 	}
 	var ve *validate.Error
 	if errors.As(err, &ve) {
-		return fmt.Errorf("%w: bad ping body: %s", domain.ErrInvalid, ve.Msg)
+		return fmt.Errorf("%w: bad %s body: %s", domain.ErrInvalid, what, ve.Msg)
 	}
-	return fmt.Errorf("%w: bad ping body", domain.ErrInvalid)
+	return fmt.Errorf("%w: bad %s body", domain.ErrInvalid, what)
 }
 
 // publish hands an accepted ping to the sinks; a sink failure is logged but does not fail the write.
@@ -126,15 +130,18 @@ func (m *Module) publish(ctx context.Context, ping domain.Ping) {
 	}
 }
 
-func (m *Module) fail(w http.ResponseWriter, r *http.Request, err error) {
+// fail maps err to the standard JSON error; kind ("ping" or "armory") prefixes the audit reason.
+func (m *Module) fail(w http.ResponseWriter, r *http.Request, kind string, err error) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	switch {
 	case errors.Is(err, errTooLarge):
-		m.host.Audit.EmitRequest(r, core.AuditEvent{Event: "validation_reject", Class: core.ClassInternal, Reason: "ping_too_large"})
+		m.host.Audit.EmitRequest(r, core.AuditEvent{Event: "validation_reject", Class: core.ClassInternal, Reason: kind + "_too_large"})
 		core.WriteError(w, http.StatusRequestEntityTooLarge, "too_large", "request body too large")
 	case errors.Is(err, domain.ErrInvalid):
-		m.host.Audit.EmitRequest(r, core.AuditEvent{Event: "validation_reject", Class: core.ClassInternal, Reason: "ping_invalid"})
+		m.host.Audit.EmitRequest(r, core.AuditEvent{Event: "validation_reject", Class: core.ClassInternal, Reason: kind + "_invalid"})
 		core.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error())
+	case errors.Is(err, domain.ErrNotFound):
+		core.WriteError(w, http.StatusNotFound, "not_found", "not found")
 	case errors.Is(err, domain.ErrStorageFull):
 		m.host.Log.Warn("write refused: storage full")
 		core.WriteError(w, http.StatusInsufficientStorage, "insufficient_storage", "the database is full; writes are paused")

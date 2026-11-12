@@ -77,6 +77,15 @@ stage, a review pass after each stage. Subagents: **Sonnet, medium effort**; lea
 - Not yet run by a human: install.sh on the Xubuntu laptop, verify-hardening.sh, client Browse dialog on Windows.
 - Nothing committed. Quick local test recipe is in the chat history: run radar-db (RADAR_REQUIRE_KEYS=false, --listen 127.0.0.1:8787 --internal-listen 127.0.0.1:8789), radar-ingest (RADAR_LOGPARSE_ALLOW_REPLAY=true, --db-url http://127.0.0.1:8789), POST a log to :8788/v1/lines.
 
+## Stage 15 armory sync: R9b (Battle.net rewrite) FINISHED
+User decisions: the armory is Blizzard's Battle.net WoW Classic Profile API; auth is OAuth2 client credentials (`WOW_ARMORY_CLIENT_ID` + `WOW_ARMORY_API_KEY` = client secret, both secrets with `_FILE`; bearer token in memory only); no enumeration endpoint, so the crawl is seeded from radar-db `GET /internal/v1/armory/seeds` (known contacts first, then guilds of stored armory characters, rosters expanded).
+State: code, tests, deploy and docs are complete. `gofmt`, `go vet`, `go test -count=1 ./...` all green, node 200/200, scan-secrets clean, security-scan PASS (3 optional scanners not installed). Details: `docs/plans/stage-15-armory-sync.md` "R9b Results" and the final summary there.
+- Fixed at the end: seeds that fail client-side validation are SKIPPED and counted (`armorysync.Config.InvalidErr` = `armoryclient.ErrBadName`), not failed; the real-radar-db seeds e2e (`TestE2ERealSeedsRoute`, `TestE2ERealFirstNightFlow`) runs by default.
+- First night: only known contacts are stored; guild expansion starts the next run (documented in `docs/armory.md`).
+- PROVISIONAL / UNVERIFIED (docs page unreadable, community-sourced): token endpoint and lifetime, host, namespace (`profile-classic-{region}`), all paths incl. the guild roster, JSON field names, 403/404 semantics, rate limits. All in `internal/mod/armoryclient/mapping.go`, configurable via `RADAR_ARMORY_*`.
+- NOT RUN: real Linux/systemd (install.sh, units, verify-hardening.sh), the real Battle.net API, `go test -race`, a production-size run, the compiled radar-armory binary.
+- Next steps for the user: create a Battle.net client (docs/armory.md), type both secrets hidden, set `RADAR_ARMORY_DEFAULT_REALM`/region/namespace, do a manual `systemctl start radar-armory` and adjust `mapping.go`/paths from the real answers. Nothing is committed.
+
 ## Next feature (planned, NOT started): Stage 10 armory module
 Plan only: docs/plans/stage-10-armory.md (tasks A0-A8). Gate: A0 needs the official WoW Forever API docs URL from the user. Secrets: env/_FILE only, never shown to Claude; typing recipe is in section 3 of the plan. **Still blocked** - the user has not supplied the docs URL as of end of session 3. The tooltip rows this unlocks (U6 in stage-11-radar-ux.md) are the only remaining piece of stage 11 not done.
 

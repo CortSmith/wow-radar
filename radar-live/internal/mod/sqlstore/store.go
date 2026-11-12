@@ -28,6 +28,10 @@ const (
 	batchesKeptMax    = 20_000
 	deathsKeptMax     = 50_000
 	pruneEveryInserts = 1000
+	// armory retention: remembered batch ids, run summaries and days of snapshot history.
+	armoryBatchesKeptMax   = 20_000
+	armoryRunsKeptMax      = 400
+	armorySnapshotKeepDays = 30
 	// fixPruneTargetPercent is the fill level the fix table is pruned down to once it exceeds the cap.
 	fixPruneTargetPercent = 90
 )
