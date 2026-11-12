@@ -2,7 +2,6 @@
 import { fmtAge } from '../format.js';
 import { clearNode } from '../dom.js';
 
-const ESCAPE_KEY = 'Escape';
 
 export default {
   name: 'search',
@@ -23,7 +22,8 @@ export default {
     const hide = () => { results.hidden = true; clearNode(results); };
     const message = (text) => { clearNode(results); results.appendChild(ctx.el('li', { className: 'none', text })); results.hidden = false; };
     const pick = (c) => { input.value = c.name; hide(); clear.hidden = false; ctx.setPlayer({ guid: c.guid, name: c.name }); };
-    const reset = () => { input.value = ''; hide(); clear.hidden = true; if (state.player) ctx.setPlayer(null); };
+    const wipe = () => { input.value = ''; hide(); clear.hidden = true; };
+    const reset = () => { wipe(); ctx.deselect(); };
 
     async function run() {
       const q = input.value.trim();
@@ -47,7 +47,7 @@ export default {
       if (timer !== null) ctx.timers.clearTimeout(timer);
       timer = ctx.timers.setTimeout(run, config.SEARCH_DEBOUNCE_MS);
     });
-    input.addEventListener('keydown', (e) => { if (e.key === ESCAPE_KEY) reset(); });
+    ctx.bus.on('escape', wipe);
     clear.addEventListener('click', reset);
     ctx.bus.on('selection', () => { if (!state.player && input.value && results.hidden) { input.value = ''; clear.hidden = true; } });
   },

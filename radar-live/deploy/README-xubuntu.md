@@ -8,7 +8,7 @@ each program idles well under 60 MB, and the units cap memory at 192 MB.
 ```powershell
 cd radar-live        # the folder that contains scripts\ and deploy\ (skip if you are already in it)
 powershell -ExecutionPolicy Bypass -File scripts\build.ps1
-scp dist\* you@laptop:/tmp/radar-live/        # or use a USB stick
+scp -r dist/* you@laptop:/tmp/radar-live/     # -r: also copies the maps/ and fail2ban/ sub-folders; or use a USB stick
 ```
 
 `dist\` holds the binaries for amd64 and arm64, `install.sh`, the two units, `radar.env.example`,
@@ -156,6 +156,23 @@ file); a running server notices the change within seconds. Both services refuse 
 key and any listener is not loopback (`RADAR_REQUIRE_KEYS`, default auto; `false` accepts an open API on purpose).
 The shipped `radar.env` sets all keys, so the units start as before; a hand-made env file without keys must set them
 or bind to loopback.
+
+### Zone maps (optional)
+
+The radar draws a zone picture behind the contacts when it can find one. The images come from game data for personal
+use, so they are **not** in the binary and **not** in git. Build them into `dist` on request:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scriptsuild.ps1 -WithMaps     # or: sh scripts/build.sh --with-maps
+```
+
+This copies `..adar-cloudsitemaps` (WebP files plus `index.json`, about 15 MB) to `distmaps`; `SHA256SUMS`
+covers every file. Copy `dist` with `scp -r`, then `sudo sh install.sh` verifies `maps/` against `SHA256SUMS` and installs it
+into `/var/lib/radar-live/maps` (owned by root, 0755/0644: the service can read it but not change it).
+`radar.env` points the server at it with `RADAR_MAPS_DIR=/var/lib/radar-live/maps` (empty = feature off). An existing
+`radar.env` is never rewritten, so after upgrading from an older install add that line yourself and
+`sudo systemctl restart radar-db`. Check: `curl -sI localhost:8787/maps/index.json` answers 200 (the page asks for it
+without a key). Without maps the page still works: grid and outline, plus a muted "no map image" note.
 
 ## 8. Upgrade and uninstall
 

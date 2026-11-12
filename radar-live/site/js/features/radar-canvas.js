@@ -116,7 +116,10 @@ function wireInput(ctx, canvas, tip, ui) {
     const wasClick = drag && Math.hypot(m.x - drag.x, m.y - drag.y) < 4;
     drag = null;
     const hit = wasClick && ui.scene ? hitTest(ui.scene.pips, m.x, m.y, HIT_RADIUS_PX) : null;
-    if (hit) ctx.setPlayer({ guid: hit.guid, name: hit.name });
+    if (!wasClick) return;
+    if (!hit) ctx.deselect();
+    else if (ctx.state.player && ctx.state.player.guid === hit.guid) ctx.deselect();
+    else ctx.setPlayer({ guid: hit.guid, name: hit.name });
   });
   canvas.addEventListener('mouseleave', () => { drag = null; tip.hidden = true; });
   canvas.addEventListener('dblclick', () => { ui.view = { ...DEFAULT_VIEW }; ui.draw(); });

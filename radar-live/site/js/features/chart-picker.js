@@ -1,6 +1,6 @@
 // Zone picker: lists the maps the server has seen (GET /api/v1/charts). Picking one switches the sweep to
 // scope=zone. Optionally loads zone images from maps/index.json (silently skipped when unavailable).
-import { findMapEntry } from '../charts.js';
+import { mapImageFor } from '../charts.js';
 import { chooseViewMap } from '../view-model.js';
 
 const REFRESH_EVERY_SWEEPS = 10;
@@ -18,6 +18,8 @@ export default {
     });
     host.appendChild(ctx.el('label', {}, `${MSG.zoneLabel} `, select));
 
+    const note = ctx.el('span', { className: 'mapNote muted', text: MSG.noMapImage, hidden: true });
+    host.appendChild(note);
     let mapIndex = null;
     const fill = () => {
       while (select.firstChild) select.removeChild(select.firstChild);
@@ -30,8 +32,8 @@ export default {
     const setImage = () => {
       const mapId = chooseViewMap(state, ctx.now());
       const chart = state.charts.find((c) => c.mapId === mapId);
-      const entry = chart ? findMapEntry(mapIndex, chart.name) : null;
-      state.mapImage = entry ? { url: ctx.config.MAPS_BASE_URL + entry.file, w: entry.w, h: entry.h } : null;
+      state.mapImage = chart ? mapImageFor(mapIndex, chart.name, ctx.config.MAPS_BASE_URL) : null;
+      note.hidden = !chart || state.mapImage !== null;
       ctx.redraw();
     };
     const loadCharts = async () => {

@@ -35,11 +35,17 @@ export default {
   },
 };
 
+/** Clicking the selected row again deselects it. */
+function toggle(ctx, c) {
+  if (ctx.state.player && ctx.state.player.guid === c.guid) ctx.deselect();
+  else ctx.setPlayer({ guid: c.guid, name: c.name });
+}
+
 function row(ctx, c, now, pinned) {
   const status = classify(c, now);
   const cls = `${status === 'stale' ? 'stale' : ''} ${c.guid === pinned ? 'sel' : ''}`.trim();
   const meta = `${c.level ? `lvl ${c.level} - ` : ''}${fmtAge(now - c.lastSeen)}`;
-  return ctx.el('li', { className: cls, on: { click: () => ctx.setPlayer({ guid: c.guid, name: c.name }) } },
+  return ctx.el('li', { className: cls, on: { click: () => toggle(ctx, c) } },
     ctx.el('span', { className: `sw ${colorOf(c, status)}` }),
     ctx.el('span', { className: 'nm', text: c.name || c.guid }),
     ctx.el('span', { className: 'meta', text: meta }));

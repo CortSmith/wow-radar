@@ -32,7 +32,7 @@ serves from disk instead.
 | `dev-demo.mjs`, `dev-server.mjs` | demo backend + static server for development (not embedded) |
 
 Feature contract: `{name, init(ctx), onSweep(result, ctx), destroy()}`. `ctx` exposes `state`, `bus`, `el`, `mount(name)`,
-`api`, `setPlayer/setZone/setRuleset/setFilters`, `refreshNow`, `fmtTime`. Mount points are the `data-mount` attributes of
+`api`, `setPlayer/deselect/setZone/setRuleset/setFilters`, `refreshNow`, `fmtTime`. Mount points are the `data-mount` attributes of
 `index.html`: `header-status header-controls notice radar side-top side-panels side-list below footer`. A feature whose
 mount is missing does nothing. To remove a feature delete its file and its line in `features.js`.
 
@@ -47,7 +47,7 @@ mount is missing does nothing. To remove a feature delete its file and its line 
 | search box (250 ms) | `GET /api/v1/contacts?q=&limit=50` |
 | bounty panel | `GET /api/v1/bounty?limit=50` each sweep while open |
 | zone list / map frames | `GET /api/v1/charts` on start, ruleset change, every 10th sweep |
-| zone images (optional) | `maps/index.json` + image files (same format as `../../maps/index.json`) |
+| zone images (optional) | `maps/index.json` (`{zones:{key:{name,file,w,h,revealed}}}`) + image files, served read-only at `/maps/` from `RADAR_MAPS_DIR` (never embedded or committed); `charts.js mapImageFor` accepts plain `.webp`/`.png` names only; a 404 index leaves the grid and a muted "no map image" note |
 
 `since` is 0 on the first call of a sector and `lastNow - 5000` afterwards. Changing ruleset, scope, guid, map or group
 discards the loaded rows and starts again at `since=0`. Stale after 5 min, dropped from the live view after 15 min (the
@@ -61,3 +61,9 @@ The view key is held in memory only by default, so closing the tab forgets it. T
 running on this origin could read it (the strict CSP, no inline script and the XSS tests are what keep that script from existing).
 Saving again with the box unticked erases a remembered key. No cookies are read or written; the key travels only in the
 `X-View-Key` header. Tests: `site/test/boot.test.js` (key prompt tests) and `site/test/csp.test.js` (page parses clean under the CSP).
+
+## Deselecting
+`ctx.deselect()` is `setPlayer(null)` when something is selected, so the sector falls back to the zone/all scope, rows reset and
+the next sweep (300 ms debounce) restarts at `since=0`. Every path calls it: click the selected list row or blip again, click
+empty canvas space, the search `x` button, and Escape (the host listens on the document, emits `escape` so the search box
+wipes itself, then deselects).

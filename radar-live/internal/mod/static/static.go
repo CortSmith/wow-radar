@@ -49,6 +49,9 @@ type Module struct {
 	host *core.Host
 	once sync.Once
 	root fs.FS
+
+	mapsOnce sync.Once
+	maps     fs.FS // nil when maps-dir is unset
 }
 
 // NewModule returns the static module.
@@ -63,6 +66,13 @@ func (m *Module) Init(host *core.Host) error {
 	err := host.Config.Declare(core.Setting{
 		Key: SiteDirKey, Kind: core.KindString,
 		Usage: "serve the web page from this directory instead of the embedded copy (development)",
+	})
+	if err != nil {
+		return err
+	}
+	err = host.Config.Declare(core.Setting{
+		Key: MapsDirKey, Kind: core.KindString,
+		Usage: "serve zone map images (WebP/PNG and index.json) read-only from this directory at /maps/ (empty = off; not part of the binary)",
 	})
 	if err != nil {
 		return err
@@ -105,6 +115,9 @@ func (m *Module) serve(w http.ResponseWriter, r *http.Request) {
 		core.WriteError(w, http.StatusNotFound, codeUnknownPath, "unknown API path")
 		return
 	}
+	if m.serveMap(w, r) {
+		return
+	}
 	if strings.ContainsAny(r.URL.Path, backslashOrNUL) {
 		notFound(w, r)
 		return
@@ -118,22 +131,22 @@ func (m *Module) serve(w http.ResponseWriter, r *http.Request) {
 		notFound(w, r)
 		return
 	}
-	writeAsset(w, r, name, data)
+	cache := assetCache
+	if path.Ext(name) == ".html" {
+		cache = htmlCache
+	}
+	writeAsset(w, r, name, data, cache)
 }
 
 // writeAsset sends one file with its type, cache policy and ETag.
-func writeAsset(w http.ResponseWriter, r *http.Request, name string, data []byte) {
+func writeAsset(w http.ResponseWriter, r *http.Request, name string, data []byte, cache string) {
 	sum := sha256.Sum256(data)
 	etag := `"` + hex.EncodeToString(sum[:etagBytes]) + `"`
 	h := w.Header()
 	h.Set("ETag", etag)
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Content-Type", typeOf(name))
-	if path.Ext(name) == ".html" {
-		h.Set("Cache-Control", htmlCache)
-	} else {
-		h.Set("Cache-Control", assetCache)
-	}
+	h.Set("Cache-Control", cache)
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return

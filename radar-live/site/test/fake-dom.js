@@ -155,7 +155,7 @@ export function createFakeDocument(mounts = mountNames()) {
   doc.createTextNode = (text) => new FakeText(text);
   doc.body = new FakeNode('body', doc);
   doc.addEventListener = (type, fn) => (doc.listeners[type] ||= []).push(fn);
-  doc.dispatch = (type) => (doc.listeners[type] || []).forEach((fn) => fn({ type }));
+  doc.dispatch = (type, extra = {}) => (doc.listeners[type] || []).forEach((fn) => fn({ type, ...extra }));
   doc.querySelector = (selector) => doc.body.querySelector(selector);
   for (const name of mounts) {
     const div = doc.createElement('div');

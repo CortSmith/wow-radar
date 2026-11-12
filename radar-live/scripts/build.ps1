@@ -9,15 +9,23 @@
   The deploy\ files (install.sh, units, env example, ...) are copied next to the binaries so that
   dist\ is everything you need to scp to the laptop.
 
+.PARAMETER WithMaps
+  Also copy ..\radar-cloud\site\maps (zone images + index.json, ~15 MB, game data for personal use) to dist\maps.
+  SHA256SUMS covers it and install.sh installs it. Without the switch dist stays small and map-free.
+
 .PARAMETER Version
   Build version stamped into the binaries (default: git describe, else "dev").
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\build.ps1
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File scripts\build.ps1 -WithMaps
 #>
 [CmdletBinding()]
 param(
-    [string]$Version = ""
+    [string]$Version = "",
+    [switch]$WithMaps
 )
 
 $ErrorActionPreference = "Stop"
@@ -82,6 +90,20 @@ if (Test-Path $fail2banSource) {
     $fail2banTarget = Join-Path $dist "fail2ban"
     New-Item -ItemType Directory -Force $fail2banTarget | Out-Null
     Copy-Item (Join-Path $fail2banSource "*") $fail2banTarget
+}
+
+# Zone maps travel only on request (they are large and not part of the repository).
+if ($WithMaps) {
+    $mapsSource = Join-Path $root "..\radar-cloud\site\maps"
+    if (Test-Path $mapsSource) {
+        $mapsTarget = Join-Path $dist "maps"
+        New-Item -ItemType Directory -Force $mapsTarget | Out-Null
+        Copy-Item -Recurse -Force (Join-Path $mapsSource "*") $mapsTarget
+        Write-Host "zone maps copied from $mapsSource"
+    }
+    else {
+        Write-Warning "-WithMaps: $mapsSource not found; building without maps"
+    }
 }
 
 # SHA256SUMS in the "hash  name" format that `sha256sum -c` reads; LF line ends, no BOM.

@@ -4,13 +4,20 @@
 #   radar-feed:             windows/amd64 and linux/amd64
 #   radar-client:           windows/amd64 (windowed exe, no console) and linux/amd64 (console + browser)
 # The deploy/ files are copied next to the binaries so dist/ is everything to scp to the laptop.
-# Usage: scripts/build.sh [version]
+# Zone maps: with --with-maps, ../radar-cloud/site/maps (WebP + index.json, ~15 MB, game data for personal use)
+# is copied to dist/maps and covered by SHA256SUMS. Without the flag dist/ stays small and map-free.
+# Usage: scripts/build.sh [--with-maps] [version]
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 dist="$root/dist"
 
+with_maps=no
+if [ "${1:-}" = "--with-maps" ]; then
+    with_maps=yes
+    shift
+fi
 version=${1:-}
 if [ -z "$version" ]; then
     version=$(git describe --tags --always --dirty 2>/dev/null || true)
@@ -47,6 +54,17 @@ done
 if [ -d deploy/fail2ban ]; then
     mkdir -p "$dist/fail2ban"
     cp deploy/fail2ban/* "$dist/fail2ban/"
+fi
+
+if [ "$with_maps" = yes ]; then
+    maps_src="$root/../radar-cloud/site/maps"
+    if [ -d "$maps_src" ]; then
+        mkdir -p "$dist/maps"
+        cp -R "$maps_src/." "$dist/maps/"
+        echo "zone maps copied from $maps_src"
+    else
+        echo "--with-maps: $maps_src not found; building without maps" >&2
+    fi
 fi
 
 if command -v sha256sum >/dev/null 2>&1; then

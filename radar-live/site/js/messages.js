@@ -2,6 +2,7 @@
 export const MSG = Object.freeze({
   title: 'Nearby Radar',
   allZones: 'All zones',
+  noMapImage: 'no map image',
   zoneLabel: 'Zone',
   noData: 'No contacts in this sector yet.',
   summary: '{n} contacts ({s} stale)',

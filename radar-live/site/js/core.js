@@ -11,6 +11,7 @@ import { sectorOf, sectorKey, sweepParams } from './sector.js';
 import { fmtTime, safeZone } from './format.js';
 
 const SWEEP_PATH = '/api/v1/sweep';
+const ESCAPE_KEY = 'Escape';
 
 /** Tiny event bus. on() returns an unsubscribe function; a throwing listener never stops the others. */
 export function createBus(onError = () => {}) {
@@ -102,6 +103,7 @@ export function createApp(env) {
   let loadedKey = '';
   const active = [];
   let ticker = null;
+  let keydown = null;
 
   /** Drops loaded rows when the sector (rule-set, scope, guid, map, group) changed. */
   function applySectorChange() {
@@ -200,6 +202,10 @@ export function createApp(env) {
       state.player = player && player.guid ? { guid: player.guid, name: player.name || '' } : null;
       changed('selection');
     },
+    /** Drops the selected player (sector falls back to the zone/all scope); a no-op when nothing is selected. */
+    deselect() {
+      if (state.player) ctx.setPlayer(null);
+    },
     setZone(zone) {
       state.zone = zone && Number.isFinite(zone.mapId) ? { mapId: zone.mapId, name: zone.name || '' } : null;
       changed('selection');
@@ -243,10 +249,17 @@ export function createApp(env) {
     ticker = env.timers.setInterval(() => bus.emit('tick'), config.COUNTDOWN_TICK_MS);
     scheduler.setHidden(Boolean(doc.hidden));
     scheduler.start();
+    keydown = (e) => {
+      if (!e || e.key !== ESCAPE_KEY) return;
+      bus.emit('escape');
+      ctx.deselect();
+    };
+    doc.addEventListener('keydown', keydown);
   }
 
   function stop() {
     scheduler.stop();
+    if (keydown && doc.removeEventListener) doc.removeEventListener('keydown', keydown);
     if (ticker !== null) env.timers.clearInterval(ticker);
     for (const f of active) {
       try {

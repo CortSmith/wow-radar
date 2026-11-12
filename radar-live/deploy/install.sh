@@ -10,6 +10,8 @@
 #           --with-ufw LAN_CIDR     also run ufw-setup.sh (default deny, SSH and web port only from LAN_CIDR)
 #           --ufw-tunnel            with --with-ufw: open no web port at all (Cloudflare Tunnel / local proxy)
 #           --with-fail2ban         also install the fail2ban filter and jail for the security log
+# A 'maps' folder next to this script (zone images + index.json, built with --with-maps) is checked and
+# installed read-only into /var/lib/radar-live/maps.
 # Afterwards:  sudo sh verify-hardening.sh   (docs/security/hardening.md explains every check)
 set -eu
 # Files created below (the settings file with the keys) start private; modes are then set explicitly.
@@ -19,6 +21,7 @@ BIN_DIR=/usr/local/bin
 ETC_DIR=/etc/radar-live
 ENV_FILE=$ETC_DIR/radar.env
 DATA_DIR=/var/lib/radar-live
+MAPS_DIR=$DATA_DIR/maps
 BACKUP_DIR=/var/backups/radar-live
 LOG_DIR=/var/log/radar
 DOC_DIR=/usr/local/share/doc/radar-live
@@ -27,6 +30,8 @@ LOCK_FILE=/run/lock/radar-live-install.lock
 SVC_USER=radar
 
 src=$(cd "$(dirname "$0")" && pwd)
+nl=$(printf '\n_')
+nl=${nl%_}
 arch=""
 start=yes
 ufw_cidr=""
@@ -63,7 +68,7 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         -h | --help)
-            sed -n '2,16p' "$0"
+            sed -n '2,18p' "$0"
             exit 0
             ;;
         *) die "unknown option: $1" ;;
@@ -109,6 +114,20 @@ for f in $files; do
     (cd "$src" && echo "$line" | sha256sum -c - >/dev/null 2>&1) || die "checksum mismatch for $f"
 done
 
+# Optional zone maps: every file of ./maps must be listed in SHA256SUMS and match. Plain path characters only.
+map_files=""
+if [ -d "$src/maps" ]; then
+    map_files=$(cd "$src" && find maps -type f | LC_ALL=C sort)
+    case $map_files in
+        *[!A-Za-z0-9._/"$nl"-]*) die "maps/ holds a file name with unusual characters; use plain names" ;;
+    esac
+    for f in $map_files; do
+        line=$(awk -v n="$f" 'substr($0, 67) == n' "$src/SHA256SUMS")
+        [ -n "$line" ] || die "$f is not listed in SHA256SUMS"
+        (cd "$src" && echo "$line" | sha256sum -c - >/dev/null 2>&1) || die "checksum mismatch for $f"
+    done
+fi
+
 # Service account and directories.
 if ! id "$SVC_USER" >/dev/null 2>&1; then
     echo "creating user $SVC_USER"
@@ -119,6 +138,8 @@ install -d -o "$SVC_USER" -g "$SVC_USER" -m 0700 "$BACKUP_DIR"
 install -d -o "$SVC_USER" -g "$SVC_USER" -m 0700 "$LOG_DIR"
 install -d -o root -g "$SVC_USER" -m 0750 "$ETC_DIR"
 install -d -m 0755 "$DOC_DIR"
+# Zone maps: owned by root, so the service (user radar) can read them but never change them.
+install -d -o root -g root -m 0755 "$MAPS_DIR"
 
 # Binaries: copy next to the target, then rename, so a running service is never half-overwritten.
 install_bin() {
@@ -127,6 +148,15 @@ install_bin() {
 }
 install_bin radar-db
 install_bin radar-ingest
+
+if [ -n "$map_files" ]; then
+    echo "installing zone maps into $MAPS_DIR"
+    for f in $map_files; do
+        rel=${f#maps/}
+        install -d -o root -g root -m 0755 "$MAPS_DIR/$(dirname "$rel")"
+        install -m 0644 -o root -g root "$src/$f" "$MAPS_DIR/$rel"
+    done
+fi
 
 # Settings and keys: created once, then left alone (except the mode, which is re-asserted).
 new_keys=no
