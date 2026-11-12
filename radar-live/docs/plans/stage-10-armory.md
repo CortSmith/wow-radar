@@ -69,7 +69,7 @@ existing sockets. Removal test: ingest without the module works.
 `GET /api/v1/profiles?rs=&guids=` (<=100, view key, rate-limited), optional `class`/`guild` filters on `/api/v1/contacts`. Frozen wire names stay;
 new fields only. Strict validation through `internal/validate`. TDD with httptest and both stores.
 
-**A5 Page (after A4 contract).** New removable feature `site/js/features/profile-panel.js` (details of the selected contact), class-coloured dots
+**A5 Page (after A4 contract; now delivered as U6 in `stage-11-radar-ux.md`, which also puts armory rows in the hover tooltip, incl. history dots).** New removable feature `site/js/features/profile-panel.js` (details of the selected contact), class-coloured dots
 (toggle, falls back to blue/red), class/guild search facets, `Profile` data fetched lazily for the selection and for visible dots in batches, textContent
 only, CSP-safe. Node tests with the fake DOM; one real-Edge check against a local stack (see `scratchpad/cdp-*.mjs` pattern).
 

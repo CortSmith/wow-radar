@@ -79,3 +79,33 @@ stage, a review pass after each stage. Subagents: **Sonnet, medium effort**; lea
 
 ## Next feature (planned, NOT started): Stage 10 armory module
 Plan only: docs/plans/stage-10-armory.md (tasks A0-A8). Gate: A0 needs the official WoW Forever API docs URL from the user. Secrets: env/_FILE only, never shown to Claude; typing recipe is in section 3 of the plan.
+
+## Next feature (planned, NOT started): Stage 11 radar UX
+Plan only: docs/plans/stage-11-radar-ux.md (multi-select chips, full greyed list, tooltips on history dots, armory rows in tooltip). U1-U5 need no armory.
+
+## Next (planned, NOT started): Stage 12 attack suite against the user's OWN laptop (authorized, self-owned hardware)
+Plan only: docs/plans/stage-12-attack-suite.md. Replaces/resumes 8.12a (which previously stopped itself on a safety-classifier read).
+Scoped, non-destructive, logs everything, does not read/exfiltrate secrets or real player data, reverts anything it changes. Produces
+docs/security/report.md (folds in 8.12c). Needs the user to confirm forwarded ports/public IP (and whether SSH is exposed) before T1/T3.
+
+## Next (planned, NOT started): Stage 13 laptop hardening (run ON the Xubuntu laptop itself, not this dev PC)
+Plan only: docs/plans/stage-13-laptop-hardening.md. Hand this file to a Claude Code session running directly on the laptop (needs root
+there). Prioritized by stage 12's report once it exists; sections 1-3 and 6 (OS baseline, network, config renames) can start without it.
+Covers the known follow-ups: data dir 0750->0700, RADAR_CORS_ORIGIN->RADAR_CORS_ORIGINS, client token-in-URL, go1.27.4 toolchain bump,
+gofmt/staticcheck/gosec open items, the flaky live-stack test. Never reads/displays secret values.
+
+## Verified 2026-11-12 (session 2, before starting stage 11/14 work)
+Full tree re-verified green from a clean checkout: `gofmt -l .` empty, `go vet ./...` clean, `go test -count=1 ./... -cover` all green
+(including the previously-flaky `internal/client TestLiveLogReachesTheDatabaseThroughTheRealStack`, which passed), 90/90 node tests green.
+Several CHECKPOINT follow-ups turned out to already be done (stale notes, not re-done this session): `RADAR_CORS_ORIGIN` is already
+`RADAR_CORS_ORIGINS` everywhere (deploy/radar.env.example, dist/, tests, docs all consistent); install.sh already makes data/backup/log dirs
+0700. Still open: radar-client's per-run token still appears in the page URL (`cmd/radar-client/main.go` `PageURL(ln, ui.token)`) - real,
+unresolved, but it's a stage-13 (laptop-hardening) item and stage 13 is deliberately not being worked yet. `staticcheck`/`gosec`/`govulncheck`
+are not installed on this Windows dev box at all (stage 13, Linux-side task) - nothing to check here.
+
+## Next (planned, NOT started): Stage 14 world map (All Zones view: continent map, zone chips, cross-zone player paths, click-to-navigate)
+Plan only: docs/plans/stage-14-world-map.md. World map art does not exist yet - W0/W1 extend extract_maps.py to pull continent + per-zone
+placement data from the local game install (read-only, same approach as today's zone extraction) into maps/world/*.png + index.json.
+Friendly/hostile chip sizing per zone, a pure worldPath() for chronological cross-zone lines per tracked player (trail fixes already carry
+mapId, no server change needed), and click-to-navigate that pre-sets the Blue/Red checkboxes from the chip clicked. Pairs well with stage
+11's multi-select but the single-player case works without it.
