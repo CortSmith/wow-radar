@@ -49,7 +49,17 @@ export default {
     });
     ctx.bus.on('escape', wipe);
     clear.addEventListener('click', reset);
-    ctx.bus.on('selection', () => { if (!state.player && input.value && results.hidden) { input.value = ''; clear.hidden = true; } });
+    // Any selection (search result, list row or radar blip) shows its name in the box with the x, as in the Go app.
+    ctx.bus.on('selection', () => {
+      if (state.player) {
+        input.value = state.player.name || state.player.guid;
+        hide();
+        clear.hidden = false;
+      } else if (input.value && results.hidden) {
+        input.value = '';
+        clear.hidden = true;
+      }
+    });
   },
 };
 

@@ -198,3 +198,29 @@ test('no stale player stays pinned after deselecting', async () => {
   assert.equal(h.app.state.contacts.has(c.guid), false);
   h.app.stop();
 });
+
+test('selecting from the list shows the name in the search box with an x on its right, like the Go app', async () => {
+  const h = await boot();
+  assert.equal(h.clearBtn.hidden, true, 'no x while nothing is selected');
+  const c = [...h.app.state.contacts.values()][0];
+  const row = h.rows().find((n) => n.textContent.includes(c.name));
+  row.dispatch('click');
+  await h.timers.advance(DEBOUNCE_MS); await settle();
+  assert.equal(h.input.value, c.name, 'the selection is shown in the search box');
+  assert.equal(h.clearBtn.hidden, false, 'the x is shown for a selection made in the list');
+  h.clearBtn.dispatch('click');
+  await expectReverted(h);
+  assert.equal(h.input.value, '', 'the search box is emptied');
+  assert.equal(h.clearBtn.hidden, true, 'the x is hidden again');
+  h.app.stop();
+});
+
+test('selecting a blip on the radar also shows the x', async () => {
+  const h = await boot();
+  const pip = h.pips()[0];
+  click(h, pip);
+  await h.timers.advance(DEBOUNCE_MS); await settle();
+  assert.equal(h.input.value, pip.name);
+  assert.equal(h.clearBtn.hidden, false);
+  h.app.stop();
+});
