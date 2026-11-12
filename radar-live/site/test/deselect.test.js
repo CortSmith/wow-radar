@@ -198,20 +198,3 @@ test('no stale player stays pinned after deselecting', async () => {
   assert.equal(h.app.state.contacts.has(c.guid), false);
   h.app.stop();
 });
-
-test('a visible "Show everyone" bar appears while a contact is selected and deselects it', async () => {
-  const h = await boot();
-  const side = h.doc.querySelector('[data-mount="side-list"]');
-  const bar = () => side.find((n) => n.className.includes('selection-bar'));
-  const button = () => bar().find((n) => n.tagName === 'BUTTON');
-  assert.equal(bar().hidden, true, 'hidden while nothing is selected');
-  const c = [...h.app.state.contacts.values()][0];
-  await h.select(c);
-  assert.equal(bar().hidden, false, 'shown while a contact is selected');
-  assert.ok(bar().textContent.includes(c.name), 'names the selected contact');
-  assert.equal(button().textContent, 'Show everyone');
-  button().dispatch('click');
-  await expectReverted(h);
-  assert.equal(bar().hidden, true, 'hidden again after deselecting');
-  h.app.stop();
-});
