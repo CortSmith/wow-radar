@@ -17,10 +17,15 @@ import { colorOf, inViewZone } from '../view-model.js';
 import { fmtAge } from '../format.js';
 import { clearNode } from '../dom.js';
 import { trackColorClass } from '../trackcolors.js';
+import { tooltipModel } from '../tooltip.js';
 
 const LIST_ROWS_MAX = 300;
 const ONLY_TRACKED_KEY = 'onlyTracked';
 const AGE_REFRESH_TICKS = 15;
+const GUID_ATTR = 'data-guid';
+const TIP_GAP_PX = 8;
+const TIP_MARGIN_PX = 4;
+const DEFAULT_VIEWPORT = { w: 1024, h: 768 };
 
 export default {
   name: 'contact-list',
@@ -82,7 +87,53 @@ export default {
       if (dimEnabled) trackSummary.textContent = fmt(MSG.trackSummary, { tracked: trackedSize, total });
       clearNode(list);
       for (const c of rows) list.appendChild(row(ctx, c, now, pinned, dimEnabled && state.tracked.has(c.guid), dimEnabled));
+      reapplyTip(); // the rows were just rebuilt: re-attach (or drop) the tooltip for whatever is hovered
     }
+
+    // Hover tooltip: ONE shared element, event delegation on the <ul> (rows are rebuilt on every sweep,
+    // so no per-row listeners). Content reuses the radar's tooltipModel() on a pip-shaped target.
+    const tip = ctx.el('div', { className: 'tip listTip', hidden: true });
+    host.appendChild(tip);
+    let hoverGuid = null;
+
+    const hideTip = () => { hoverGuid = null; tip.hidden = true; };
+    const guidOf = (node) => {
+      for (let n = node; n && n !== list; n = n.parentNode) {
+        const g = n.getAttribute ? n.getAttribute(GUID_ATTR) : null;
+        if (g) return { guid: g, rowEl: n };
+      }
+      return null;
+    };
+    function showTip(guid, rowEl) {
+      const c = state.contacts.get(guid);
+      if (!c) { hideTip(); return; }
+      const now = ctx.now();
+      const rowsText = tooltipModel(
+        { name: c.name || c.guid, contact: c, status: classify(c, now) },
+        { MSG, fmt, now: ctx.now, fmtAge, fmtTime: ctx.fmtTime, state },
+      );
+      if (state.tracked.size > 0 && !state.tracked.has(guid)) rowsText.push(MSG.notTracked);
+      hoverGuid = guid;
+      tip.textContent = rowsText.join('\n');
+      tip.hidden = false;
+      placeTip(ctx, tip, rowEl);
+    }
+    function reapplyTip() {
+      if (!hoverGuid) return;
+      const li = list.children.find((n) => n.getAttribute && n.getAttribute(GUID_ATTR) === hoverGuid);
+      if (li) showTip(hoverGuid, li);
+      else hideTip();
+    }
+    const onHover = (e) => {
+      const hit = guidOf(e.target);
+      if (hit) showTip(hit.guid, hit.rowEl);
+      else hideTip();
+    };
+    list.addEventListener('mouseover', onHover);
+    list.addEventListener('mousemove', onHover);
+    list.addEventListener('mouseleave', hideTip);
+    list.addEventListener('click', hideTip); // a click changes tracking/order: the old tooltip is moot
+    list.addEventListener('scroll', hideTip);
     for (const ev of ['sweep', 'reset', 'selection', 'filters', 'worldView']) ctx.bus.on(ev, render);
     // Ages only change slowly: rebuilding up to 300 rows every second made the page laggy.
     let ticks = 0;
@@ -117,6 +168,28 @@ function row(ctx, c, now, pinned, isTracked, dimEnabled) {
       on: { click: (e) => { e.stopPropagation(); ctx.removePlayer(c.guid); } },
     }));
   }
-  const attrs = dim ? { title: MSG.notTracked, 'aria-label': MSG.notTracked } : {};
+  // The "not in your search" hint now lives in the hover tooltip (no native title: it would double up).
+  const attrs = dim ? { [GUID_ATTR]: c.guid, 'aria-label': MSG.notTracked } : { [GUID_ATTR]: c.guid };
   return ctx.el('li', { className: cls, attrs, on: { click: () => toggle(ctx, c) } }, ...children);
+}
+
+/**
+ * Positions the shared tooltip (position:fixed, viewport coords) to the LEFT of the hovered row - the
+ * sidebar is docked right - flipping to the right side if there is no room, clamped inside the viewport.
+ */
+function placeTip(ctx, tip, rowEl) {
+  const win = ctx.win;
+  const vw = (win && win.innerWidth) || DEFAULT_VIEWPORT.w;
+  const vh = (win && win.innerHeight) || DEFAULT_VIEWPORT.h;
+  const r = rowEl.getBoundingClientRect();
+  const t = tip.getBoundingClientRect();
+  const tw = t.width || 0;
+  const th = t.height || 0;
+  const rowRight = r.right !== undefined ? r.right : r.left + r.width;
+  let left = r.left - tw - TIP_GAP_PX;
+  if (left < TIP_MARGIN_PX) left = rowRight + TIP_GAP_PX;
+  left = Math.max(TIP_MARGIN_PX, Math.min(left, vw - tw - TIP_MARGIN_PX));
+  const top = Math.max(TIP_MARGIN_PX, Math.min(r.top, vh - th - TIP_MARGIN_PX));
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
 }

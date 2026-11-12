@@ -70,7 +70,8 @@ test('2 tracked: tracked rows normal, others .dim, header line shows correct cou
   assert.ok(dimRows.length > 0, 'non-tracked rows are dimmed');
   assert.equal(trackedRows.length, 2, 'exactly the 2 tracked rows are not dimmed');
   for (const r of dimRows) {
-    assert.equal(r.getAttribute('title'), 'not in your search');
+    // The hint moved into the hover tooltip; a native title would show a second, duplicate tooltip.
+    assert.equal(r.getAttribute('title'), null);
     assert.equal(r.getAttribute('aria-label'), 'not in your search');
   }
   for (const r of trackedRows) {
@@ -151,5 +152,131 @@ test('track colours used in the list match js/trackcolors.js and stay stable acr
   h.app.ctx.focusPlayer(a.guid); // forces a re-render via the 'selection' bus event
   assert.equal(marker().className, before);
   assert.equal(before, `sw ${trackColorClass(a.guid)}`);
+  h.app.stop();
+});
+
+// ---- hover tooltip ----
+const listOf = (h) => h.side.find((n) => n.tagName === 'UL');
+const tipOf = (h) => h.side.find((n) => n.className === 'tip listTip');
+const rowOf = (h, c) => h.rows().find((n) => n.getAttribute('data-guid') === c.guid);
+const hover = (h, node) => listOf(h).dispatch('mouseover', { target: node });
+
+test('tooltip: one shared element, hidden until a row is hovered', async () => {
+  const h = await boot();
+  assert.equal(h.side.findAll((n) => n.className === 'tip listTip').length, 1);
+  assert.equal(tipOf(h).hidden, true);
+  h.app.stop();
+});
+
+test('tooltip: hovering a row (or any child of it) shows name, state line and age; no hint when nothing tracked', async () => {
+  const h = await boot();
+  const [a] = contacts(h);
+  const row = rowOf(h, a);
+  hover(h, row.children.find((n) => n.className === 'nm')); // delegation: target is a child of the <li>
+  const tip = tipOf(h);
+  assert.equal(tip.hidden, false);
+  assert.ok(tip.textContent.includes(a.name), tip.textContent);
+  assert.ok(tip.textContent.includes('level'), tip.textContent);
+  assert.ok(tip.textContent.includes('seen'), tip.textContent);
+  assert.equal(tip.textContent.includes('not in your search'), false);
+  h.app.stop();
+});
+
+test('tooltip: leaving the list, clicking, or scrolling hides it', async () => {
+  const h = await boot();
+  const [a] = contacts(h);
+  for (const ev of ['mouseleave', 'click', 'scroll']) {
+    hover(h, rowOf(h, a));
+    assert.equal(tipOf(h).hidden, false, `shown before ${ev}`);
+    listOf(h).dispatch(ev);
+    assert.equal(tipOf(h).hidden, true, `${ev} hides it`);
+  }
+  h.app.stop();
+});
+
+test('tooltip: moving the pointer off any row (over list padding) hides it', async () => {
+  const h = await boot();
+  const [a] = contacts(h);
+  hover(h, rowOf(h, a));
+  hover(h, listOf(h));
+  assert.equal(tipOf(h).hidden, true);
+  h.app.stop();
+});
+
+test('tooltip: dim rows add the "not in your search" line (tracked rows do not); the x button still hovers the row', async () => {
+  const h = await boot();
+  const [a, b] = contacts(h);
+  h.app.ctx.addPlayer({ guid: a.guid, name: a.name });
+  hover(h, rowOf(h, b));
+  assert.ok(tipOf(h).textContent.includes('not in your search'));
+  const aRow = rowOf(h, a);
+  hover(h, aRow.children.find((n) => n.tagName === 'BUTTON'));
+  assert.equal(tipOf(h).hidden, false);
+  assert.ok(tipOf(h).textContent.includes(a.name));
+  assert.equal(tipOf(h).textContent.includes('not in your search'), false);
+  h.app.stop();
+});
+
+test('tooltip: survives a list re-render and refreshes its text', async () => {
+  const h = await boot();
+  const [a, b] = contacts(h);
+  h.app.ctx.addPlayer({ guid: a.guid, name: a.name });
+  hover(h, rowOf(h, b));
+  assert.ok(tipOf(h).textContent.includes('not in your search'));
+  h.app.ctx.addPlayer({ guid: b.guid, name: b.name }); // re-renders every row; b is no longer dim
+  assert.equal(tipOf(h).hidden, false, 'still showing for the hovered contact');
+  assert.ok(tipOf(h).textContent.includes(b.name));
+  assert.equal(tipOf(h).textContent.includes('not in your search'), false, 'text re-applied from fresh state');
+  h.app.stop();
+});
+
+test('tooltip: hides when the hovered contact disappears from the list on re-render', async () => {
+  const h = await boot();
+  const [a, b] = contacts(h);
+  h.app.ctx.addPlayer({ guid: a.guid, name: a.name });
+  hover(h, rowOf(h, b));
+  assert.equal(tipOf(h).hidden, false);
+  h.app.state.contacts.delete(b.guid);
+  h.app.ctx.bus.emit('sweep');
+  assert.equal(tipOf(h).hidden, true);
+  h.app.stop();
+});
+
+test('tooltip: text goes through textContent only (no HTML parsing, no element children)', async () => {
+  const h = await boot();
+  const [a] = contacts(h);
+  a.name = '<img src=x onerror=alert(1)>';
+  h.app.ctx.bus.emit('sweep');
+  hover(h, rowOf(h, a));
+  const tip = tipOf(h);
+  assert.ok(tip.textContent.includes('<img src=x onerror=alert(1)>'));
+  assert.equal(tip.children.length, 0);
+  h.app.stop();
+});
+
+test('tooltip: placed left of the row, flipped right when there is no room, clamped to the viewport', async () => {
+  const h = await boot();
+  const [a] = contacts(h);
+  const tip = tipOf(h);
+  tip.getBoundingClientRect = () => ({ left: 0, top: 0, width: 100, height: 50 });
+  const proto = Object.getPrototypeOf(rowOf(h, a));
+  const orig = proto.getBoundingClientRect;
+  try {
+    proto.getBoundingClientRect = function rect() {
+      return this.tagName === 'LI' ? { left: 600, right: 900, top: 100, width: 300, height: 20 } : orig.call(this);
+    };
+    hover(h, rowOf(h, a));
+    assert.equal(tip.style.left, '492px', 'left of the row: 600 - 100 - 8');
+    assert.equal(tip.style.top, '100px');
+
+    proto.getBoundingClientRect = function rect() {
+      return this.tagName === 'LI' ? { left: 20, right: 320, top: 740, width: 300, height: 20 } : orig.call(this);
+    };
+    hover(h, rowOf(h, a));
+    assert.equal(tip.style.left, '328px', 'no room on the left: flips to the right of the row');
+    assert.equal(tip.style.top, '714px', 'clamped to the bottom edge of the 768px default viewport: 768 - 50 - 4');
+  } finally {
+    proto.getBoundingClientRect = orig;
+  }
   h.app.stop();
 });
