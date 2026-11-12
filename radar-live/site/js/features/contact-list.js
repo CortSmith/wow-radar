@@ -12,12 +12,23 @@ export default {
     const host = ctx.mount('side-list');
     if (!host) return;
     const { MSG, fmt, state } = ctx;
+    const selectedName = ctx.el('span', { className: 'nm' });
+    const showEveryone = ctx.el('button', { type: 'button', text: MSG.showEveryone, on: { click: () => ctx.deselect() } });
+    const selectionBar = ctx.el('div', { className: 'selection-bar', hidden: true }, selectedName, showEveryone);
     const summary = ctx.el('div', { className: 'summary muted' });
     const list = ctx.el('ul', { className: 'list' });
+    host.appendChild(selectionBar);
     host.appendChild(summary);
     host.appendChild(list);
 
+    /** While a contact is selected the list shows only that contact; the bar says so and offers the way back. */
+    function renderSelectionBar() {
+      selectionBar.hidden = !state.player;
+      selectedName.textContent = state.player ? fmt(MSG.showingOnly, { name: state.player.name || state.player.guid }) : '';
+    }
+
     function render() {
+      renderSelectionBar();
       const now = ctx.now();
       const pinned = state.player ? state.player.guid : '';
       const rows = visibleContacts(state.contacts, now, pinned)

@@ -6,6 +6,8 @@ export const MSG = Object.freeze({
   zoneLabel: 'Zone',
   noData: 'No contacts in this sector yet.',
   summary: '{n} contacts ({s} stale)',
+  showingOnly: 'Showing only {name}',
+  showEveryone: 'Show everyone',
   nextUpdate: 'next update in {s}s',
   updating: 'updating...',
   retryIn: 'error, retry in {s}s',
