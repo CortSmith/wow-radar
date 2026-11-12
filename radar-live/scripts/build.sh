@@ -40,6 +40,7 @@ build radar-client windows amd64 -H=windowsgui
 build radar-client linux amd64
 
 for f in deploy/*; do
+    case "$f" in *_test.go) continue ;; esac
     [ -f "$f" ] && cp "$f" "$dist/"
 done
 # The fail2ban filter and jail go in a sub-folder (used by install.sh --with-fail2ban).
@@ -49,14 +50,14 @@ if [ -d deploy/fail2ban ]; then
 fi
 
 if command -v sha256sum >/dev/null 2>&1; then
-    hasher="sha256sum"
+    hasher="sha256sum --text"
 else
     hasher="shasum -a 256"
 fi
 (
     cd "$dist"
-    # shellcheck disable=SC2012,SC2086
-    ls -1 | grep -v '^SHA256SUMS$' | LC_ALL=C sort | while read -r name; do
+    # Regular files only, recursively (the fail2ban/ sub-folder), paths relative to dist/ as install.sh expects.
+    find . -type f ! -name SHA256SUMS | sed 's|^\./||' | LC_ALL=C sort | while read -r name; do
         $hasher "$name"
     done > SHA256SUMS
 )

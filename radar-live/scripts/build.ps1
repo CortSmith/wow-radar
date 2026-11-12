@@ -29,7 +29,8 @@ $dist = Join-Path $root "dist"
 if (-not $Version) {
     $Version = "dev"
     if (Get-Command git -ErrorAction SilentlyContinue) {
-        $described = & git describe --tags --always --dirty 2>$null
+        $described = $null
+        try { $described = & git describe --tags --always --dirty 2>$null } catch { $described = $null }
         if ($LASTEXITCODE -eq 0 -and $described) { $Version = "$described".Trim() }
     }
 }
@@ -72,7 +73,7 @@ finally {
 }
 
 # Deployment files travel with the binaries.
-Get-ChildItem -File (Join-Path $root "deploy") | ForEach-Object {
+Get-ChildItem -File (Join-Path $root "deploy") | Where-Object { $_.Name -notlike "*_test.go" } | ForEach-Object {
     Copy-Item $_.FullName (Join-Path $dist $_.Name)
 }
 # The fail2ban filter and jail go in a sub-folder (used by install.sh --with-fail2ban).
@@ -84,10 +85,11 @@ if (Test-Path $fail2banSource) {
 }
 
 # SHA256SUMS in the "hash  name" format that `sha256sum -c` reads; LF line ends, no BOM.
-$lines = Get-ChildItem -File $dist | Where-Object { $_.Name -ne "SHA256SUMS" } | Sort-Object Name | ForEach-Object {
+$lines = Get-ChildItem -File -Recurse $dist | Where-Object { $_.Name -ne "SHA256SUMS" } | ForEach-Object {
+    $relative = $_.FullName.Substring($dist.Length + 1).Replace("\", "/")
     $hash = (Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
-    "$hash  $($_.Name)"
-}
+    "$hash  $relative"
+} | Sort-Object
 $text = ($lines -join "`n") + "`n"
 [System.IO.File]::WriteAllText((Join-Path $dist "SHA256SUMS"), $text, (New-Object System.Text.UTF8Encoding($false)))
 
