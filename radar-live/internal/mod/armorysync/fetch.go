@@ -56,6 +56,7 @@ const (
 type slot struct {
 	state slotState
 	char  domain.ArmoryCharacter
+	err   error // the auth refusal, for slotFatal
 }
 
 func (s *Syncer) isAuth(err error) bool {
@@ -72,7 +73,7 @@ func (st *runState) fetchOne(ctx context.Context, ref CharRef) slot {
 	case err == nil:
 		return slot{state: slotOK, char: c}
 	case st.s.isAuth(err):
-		return slot{state: slotFatal}
+		return slot{state: slotFatal, err: err}
 	case ctx.Err() != nil:
 		return slot{}
 	case st.s.isInvalid(err):
@@ -83,7 +84,7 @@ func (st *runState) fetchOne(ctx context.Context, ref CharRef) slot {
 
 // fetchPage reads the details of refs with a bounded worker pool. The result keeps page order: it is the
 // longest prefix whose fetches were all attempted. complete is false when a budget or cancel cut it short.
-func (st *runState) fetchPage(ctx context.Context, refs []CharRef) (chars []domain.ArmoryCharacter, complete bool, fatal bool) {
+func (st *runState) fetchPage(ctx context.Context, refs []CharRef) (chars []domain.ArmoryCharacter, complete bool, fatal error) {
 	fctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	slots := make([]slot, len(refs))
@@ -118,16 +119,19 @@ dispatch:
 }
 
 // collect counts the attempted prefix and returns its characters.
-func (st *runState) collect(slots []slot) (chars []domain.ArmoryCharacter, complete bool, fatal bool) {
+func (st *runState) collect(slots []slot) (chars []domain.ArmoryCharacter, complete bool, fatal error) {
 	for _, sl := range slots {
 		if sl.state == slotFatal {
-			return nil, false, true
+			if sl.err == nil {
+				return nil, false, ErrAuth
+			}
+			return nil, false, sl.err
 		}
 	}
 	for _, sl := range slots {
 		switch sl.state {
 		case slotNone:
-			return chars, false, false
+			return chars, false, nil
 		case slotFailed:
 			st.run.Failed++
 		case slotInvalid:
@@ -137,7 +141,7 @@ func (st *runState) collect(slots []slot) (chars []domain.ArmoryCharacter, compl
 			chars = append(chars, sl.char)
 		}
 	}
-	return chars, true, false
+	return chars, true, nil
 }
 
 // timeUp reports (and remembers) that the wall-clock budget is spent, without using a request permit.

@@ -111,6 +111,16 @@ func TestKeyFileVariantAndPrecedence(t *testing.T) {
 	if err != nil || c.apiKey.Reveal() != fakeAPIKey {
 		t.Fatalf("plain env must win: %v", err)
 	}
+	// ...but it must say so: a stale radar.env value silently shadowing a freshly typed secret file
+	// is exactly what produced the armory's 401 "Bad credentials" on the first real run.
+	if len(c.warnings) != 1 || !strings.Contains(c.warnings[0], "WOW_ARMORY_API_KEY is set directly and overrides WOW_ARMORY_API_KEY_FILE") {
+		t.Fatalf("want one override warning, got %q", c.warnings)
+	}
+	for _, w := range c.warnings {
+		if strings.Contains(w, fakeAPIKey) || strings.Contains(w, "file-key-2222") || strings.Contains(w, f) {
+			t.Fatal("override warning must not contain a key or a path")
+		}
+	}
 }
 
 func TestInvalidConfigs(t *testing.T) {
@@ -118,25 +128,33 @@ func TestInvalidConfigs(t *testing.T) {
 		mut  func(map[string]string)
 		args []string
 	}{
-		"missing api key":   {mut: func(e map[string]string) { delete(e, "WOW_ARMORY_API_KEY") }},
-		"empty api key":     {mut: func(e map[string]string) { e["WOW_ARMORY_API_KEY"] = "  " }},
-		"missing db key":    {mut: func(e map[string]string) { delete(e, "RADAR_ARMORY_DB_KEY") }},
-		"missing client id": {mut: func(e map[string]string) { delete(e, "WOW_ARMORY_CLIENT_ID") }},
-		"empty client id":   {mut: func(e map[string]string) { e["WOW_ARMORY_CLIENT_ID"] = " " }},
-		"bad seed page":     {mut: func(e map[string]string) { e["RADAR_ARMORY_SEED_PAGE_SIZE"] = "0" }},
-		"huge seed page":    {mut: func(e map[string]string) { e["RADAR_ARMORY_SEED_PAGE_SIZE"] = "501" }},
-		"bad guild cap":     {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_GUILD_MEMBERS"] = "x" }},
-		"zero guild cap":    {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_GUILD_MEMBERS"] = "0" }},
-		"remote http db":    {mut: func(e map[string]string) { e["RADAR_ARMORY_DB_URL"] = "http://db.example.test:8789" }},
-		"db url query":      {mut: func(e map[string]string) { e["RADAR_ARMORY_DB_URL"] = "http://127.0.0.1:8789/?x=1" }},
-		"db url userinfo":   {mut: func(e map[string]string) { e["RADAR_ARMORY_DB_URL"] = "https://u:p@127.0.0.1:8789" }},
-		"bad rate":          {mut: func(e map[string]string) { e["RADAR_ARMORY_RATE"] = "fast" }},
-		"negative rate":     {mut: func(e map[string]string) { e["RADAR_ARMORY_RATE"] = "-1" }},
-		"bad concurrency":   {mut: func(e map[string]string) { e["RADAR_ARMORY_CONCURRENCY"] = "0" }},
-		"neg max requests":  {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_REQUESTS"] = "-5" }},
-		"bad runtime":       {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_RUNTIME"] = "soon" }},
-		"zero runtime":      {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_RUNTIME"] = "0s" }},
-		"bad location":      {mut: func(e map[string]string) { e["RADAR_ARMORY_LOCATION"] = "Mars/Base" }},
+		"missing api key":       {mut: func(e map[string]string) { delete(e, "WOW_ARMORY_API_KEY") }},
+		"empty api key":         {mut: func(e map[string]string) { e["WOW_ARMORY_API_KEY"] = "  " }},
+		"missing db key":        {mut: func(e map[string]string) { delete(e, "RADAR_ARMORY_DB_KEY") }},
+		"missing client id":     {mut: func(e map[string]string) { delete(e, "WOW_ARMORY_CLIENT_ID") }},
+		"empty client id":       {mut: func(e map[string]string) { e["WOW_ARMORY_CLIENT_ID"] = " " }},
+		"placeholder secret":    {mut: func(e map[string]string) { e["WOW_ARMORY_API_KEY"] = "CHANGE_ME_CLIENT_SECRET" }},
+		"placeholder client id": {mut: func(e map[string]string) { e["WOW_ARMORY_CLIENT_ID"] = "CHANGE_ME" }},
+		"placeholder db key":    {mut: func(e map[string]string) { e["RADAR_ARMORY_DB_KEY"] = "CHANGE_ME_INGEST_KEY" }},
+		"id equals secret":      {mut: func(e map[string]string) { e["WOW_ARMORY_CLIENT_ID"] = fakeAPIKey }},
+		"secret inner space":    {mut: func(e map[string]string) { e["WOW_ARMORY_API_KEY"] = "test-armory secret-000000000000000" }},
+		"client id colon":       {mut: func(e map[string]string) { e["WOW_ARMORY_CLIENT_ID"] = "test-armory:client-55555555555555" }},
+		"secret is a token":     {mut: func(e map[string]string) { e["WOW_ARMORY_API_KEY"] = "US" + strings.Repeat("aB3", 10) + "x9" }},
+		"secret is an eu token": {mut: func(e map[string]string) { e["WOW_ARMORY_API_KEY"] = "EU" + strings.Repeat("Zz09", 8) }},
+		"bad seed page":         {mut: func(e map[string]string) { e["RADAR_ARMORY_SEED_PAGE_SIZE"] = "0" }},
+		"huge seed page":        {mut: func(e map[string]string) { e["RADAR_ARMORY_SEED_PAGE_SIZE"] = "501" }},
+		"bad guild cap":         {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_GUILD_MEMBERS"] = "x" }},
+		"zero guild cap":        {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_GUILD_MEMBERS"] = "0" }},
+		"remote http db":        {mut: func(e map[string]string) { e["RADAR_ARMORY_DB_URL"] = "http://db.example.test:8789" }},
+		"db url query":          {mut: func(e map[string]string) { e["RADAR_ARMORY_DB_URL"] = "http://127.0.0.1:8789/?x=1" }},
+		"db url userinfo":       {mut: func(e map[string]string) { e["RADAR_ARMORY_DB_URL"] = "https://u:p@127.0.0.1:8789" }},
+		"bad rate":              {mut: func(e map[string]string) { e["RADAR_ARMORY_RATE"] = "fast" }},
+		"negative rate":         {mut: func(e map[string]string) { e["RADAR_ARMORY_RATE"] = "-1" }},
+		"bad concurrency":       {mut: func(e map[string]string) { e["RADAR_ARMORY_CONCURRENCY"] = "0" }},
+		"neg max requests":      {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_REQUESTS"] = "-5" }},
+		"bad runtime":           {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_RUNTIME"] = "soon" }},
+		"zero runtime":          {mut: func(e map[string]string) { e["RADAR_ARMORY_MAX_RUNTIME"] = "0s" }},
+		"bad location":          {mut: func(e map[string]string) { e["RADAR_ARMORY_LOCATION"] = "Mars/Base" }},
 		"unreadable keyfile": {mut: func(e map[string]string) {
 			delete(e, "WOW_ARMORY_API_KEY")
 			e["WOW_ARMORY_API_KEY_FILE"] = filepath.Join(os.TempDir(), "does-not-exist-radar-armory")

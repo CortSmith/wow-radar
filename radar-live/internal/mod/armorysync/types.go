@@ -12,6 +12,7 @@ package armorysync
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"radarlive/internal/domain"
@@ -62,6 +63,14 @@ var ErrFatal = errors.New("armorysync: fatal")
 
 // ErrAuth is the armory refusing the key; Config.AuthErr may name the client's own sentinel as well.
 var ErrAuth = errors.New("armorysync: the armory rejected the API key")
+
+// authEnd ends the run on an auth refusal, keeping the client's reason (which step refused) when known.
+func authEnd(cause error) *end {
+	if cause == nil || errors.Is(cause, ErrAuth) {
+		return &end{status: StatusFailed, err: ErrAuth}
+	}
+	return &end{status: StatusFailed, err: fmt.Errorf("%w: %w", ErrAuth, cause)}
+}
 
 // Summary is the outcome of one Run. The counters are cumulative for a resumed run; Duration covers
 // this invocation only. Note holds a short, secret-free reason when the run ended early.

@@ -225,6 +225,10 @@ armory_missing=""
 [ -f "$ARMORY_ID_FILE" ] || armory_missing="$armory_missing the client id file $ARMORY_ID_FILE;"
 [ -f "$ARMORY_KEY_FILE" ] || armory_missing="$armory_missing the client secret file $ARMORY_KEY_FILE;"
 grep -Eq '^RADAR_ARMORY_DB_KEY(_FILE)?=[^[:space:]]' "$ENV_FILE" || armory_missing="$armory_missing RADAR_ARMORY_DB_KEY in $ENV_FILE;"
+[ -s "$ARMORY_ID_FILE" ] || [ ! -f "$ARMORY_ID_FILE" ] || armory_missing="$armory_missing a value in $ARMORY_ID_FILE (it is empty);"
+[ -s "$ARMORY_KEY_FILE" ] || [ ! -f "$ARMORY_KEY_FILE" ] || armory_missing="$armory_missing a value in $ARMORY_KEY_FILE (it is empty);"
+! grep -Eq '^(RADAR_ARMORY_DB_KEY|WOW_ARMORY_API_KEY|WOW_ARMORY_CLIENT_ID)=["]?CHANGE_ME' "$ENV_FILE" ||
+    armory_missing="$armory_missing a real value instead of the CHANGE_ME placeholder in $ENV_FILE;"
 if [ -f "$ARMORY_KEY_FILE" ] && [ -f "$ARMORY_ID_FILE" ] && [ -z "$armory_missing" ]; then
     systemctl enable --now radar-armory.timer >/dev/null 2>&1
     armory_timer=yes

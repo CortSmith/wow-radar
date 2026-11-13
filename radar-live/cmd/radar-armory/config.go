@@ -58,6 +58,7 @@ type config struct {
 	location                 *time.Location
 	apiKey, clientID, dbKey  secretVal // Battle.net client secret, client id, radar-db ingest key
 	showVersion              bool
+	warnings                 []string // configuration notes for stderr; names settings, never values
 }
 
 // configError is a configuration problem (exit code 2). Its text never contains a setting value.
@@ -144,8 +145,73 @@ func parseConfig(args []string, lookup func(string) (string, bool)) (config, err
 		if *k.dst, err = readKey(lookup, k.name); err != nil {
 			return c, err
 		}
+		if w := shadowedFile(lookup, k.name); w != "" {
+			c.warnings = append(c.warnings, w)
+		}
+	}
+	if err := checkCredentials(c.clientID.Reveal(), c.apiKey.Reveal(), c.dbKey.Reveal()); err != nil {
+		return c, err
 	}
 	return c, nil
+}
+
+// placeholderPrefix marks example values from radar.env.example (same convention as radar-db's keys module).
+const placeholderPrefix = "CHANGE_ME"
+
+// checkCredentials refuses credentials that are set but cannot work, so a run fails at once with a clear
+// message instead of as an armory 401 "Bad credentials". Messages name the setting, never the value.
+func checkCredentials(clientID, secret, dbKey string) error {
+	for _, k := range []struct{ name, v string }{{envClientID, clientID}, {envAPIKey, secret}, {envDBKey, dbKey}} {
+		switch {
+		case strings.HasPrefix(k.v, placeholderPrefix):
+			return cfgErr("%s is the CHANGE_ME placeholder from radar.env.example, not a real value: set it (or %s%s)", k.name, k.name, fileSuffix)
+		case !printableNoSpace(k.v):
+			return cfgErr("%s contains spaces, line breaks or control characters inside the value: retype it", k.name)
+		}
+	}
+	switch {
+	case clientID == secret:
+		return cfgErr("%s and %s hold the same value: the id goes in the client-id file, the client secret in the api-key file", envClientID, envAPIKey)
+	case strings.Contains(clientID, ":"):
+		return cfgErr("%s contains ':', which no Battle.net client id does (it would break the HTTP Basic login)", envClientID)
+	case looksLikeAccessToken(secret):
+		return cfgErr("%s looks like an OAuth access token (region prefix + 32 characters), not the client secret: "+
+			"put the client secret from the developer portal there; radar-armory requests its own token on every run", envAPIKey)
+	case looksLikeAccessToken(clientID):
+		return cfgErr("%s looks like an OAuth access token, not the client id from the developer portal", envClientID)
+	}
+	return nil
+}
+
+// looksLikeAccessToken matches the shape of a Battle.net access token ("US" + 32 letters/digits, likewise
+// EU, KR, TW, CN, APAC). Client ids and secrets are 32 characters with no region prefix.
+func looksLikeAccessToken(v string) bool {
+	for _, p := range []string{"US", "EU", "KR", "TW", "CN", "APAC"} {
+		rest, ok := strings.CutPrefix(v, p)
+		if ok && len(rest) == 32 && isAlnum(rest) {
+			return true
+		}
+	}
+	return false
+}
+
+func isAlnum(s string) bool {
+	for i := 0; i < len(s); i++ {
+		b := s[i]
+		if !('a' <= b && b <= 'z' || 'A' <= b && b <= 'Z' || '0' <= b && b <= '9') {
+			return false
+		}
+	}
+	return true
+}
+
+func printableNoSpace(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] <= ' ' || s[i] >= 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *config) parseNumbers(rate, concurrency, maxRequests, runtime, location, seedPage, guildMembers string) error {
@@ -218,6 +284,19 @@ func readKey(lookup func(string) (string, bool), name string) (secretVal, error)
 		return secretVal{}, cfgErr("%s%s: the key file is empty", name, fileSuffix)
 	}
 	return secretVal{}, cfgErr("%s is not set (set it, or %s%s to a file holding it)", name, name, fileSuffix)
+}
+
+// shadowedFile reports when the plain variable name is set and so overrides name_FILE. That combination
+// silently ignores a freshly typed secret file (a stale or placeholder value in radar.env wins), which shows
+// up only as the armory answering 401 "Bad credentials". The note names the settings, never a value.
+func shadowedFile(lookup func(string) (string, bool), name string) string {
+	v, ok := lookup(name)
+	path, fok := lookup(name + fileSuffix)
+	if !ok || strings.TrimSpace(v) == "" || !fok || strings.TrimSpace(path) == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s is set directly and overrides %s%s; the key file is ignored (remove the %s= line from radar.env to use the file)",
+		name, name, fileSuffix, name)
 }
 
 func readSmallFile(path string) ([]byte, error) {

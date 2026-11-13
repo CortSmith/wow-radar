@@ -2,9 +2,11 @@ package armoryclient
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -1302,4 +1304,68 @@ func TestNoErrorLeaksSecrets(t *testing.T) {
 		t.Fatalf("tracked %d/%d", len(h.errs), len(h2.errs))
 	}
 	var _ Source = h.c
+}
+
+// TestTokenRequestMatchesReferenceCurl pins the token exchange to the request verified against the real
+// Battle.net token endpoint (docs/armory.md, "Reference OAuth request"):
+//
+//	curl -u CLIENT_ID:CLIENT_SECRET -d grant_type=client_credentials https://oauth.battle.net/token
+//
+// i.e. POST, HTTP Basic client_id:client_secret, form body exactly grant_type=client_credentials, form
+// content type, no query string, and the credentials nowhere but the Authorization header.
+func TestTokenRequestMatchesReferenceCurl(t *testing.T) {
+	h := newHarness(t, bnet(t), nil)
+	var seen int
+	h.tokenFn = func(w http.ResponseWriter, r *http.Request, n int64) {
+		seen++
+		body, _ := io.ReadAll(r.Body)
+		wantAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(fakeID()+":"+fakeSecret()))
+		switch {
+		case r.Method != http.MethodPost:
+			t.Errorf("method %s, want POST", r.Method)
+		case r.URL.RawQuery != "":
+			t.Errorf("token request has a query string")
+		case r.Header.Get("Authorization") != wantAuth:
+			t.Errorf("Authorization is not HTTP Basic client_id:client_secret")
+		case r.Header.Get("Content-Type") != "application/x-www-form-urlencoded":
+			t.Errorf("Content-Type %q", r.Header.Get("Content-Type"))
+		case string(body) != "grant_type=client_credentials":
+			t.Errorf("body %q, want exactly grant_type=client_credentials", body)
+		}
+		for _, s := range []string{fakeID(), fakeSecret()} {
+			if strings.Contains(string(body), s) || strings.Contains(r.URL.String(), s) {
+				t.Errorf("a credential leaked outside the Authorization header")
+			}
+		}
+		writeJSON(w, 200, fmt.Sprintf(`{"access_token":%q,"token_type":"bearer","expires_in":86399}`, fakeToken(n)))
+	}
+	if _, err := h.c.Character(context.Background(), "Fake Realm", "Alice"); err != nil {
+		t.Fatal(err)
+	}
+	if seen != 1 {
+		t.Fatalf("token endpoint hit %d times, want 1", seen)
+	}
+}
+
+// TestAuthErrorsNameTheRefusingStep keeps the two auth refusals apart in the run's log line: the token
+// endpoint refusing the client credentials vs. the profile API refusing a freshly issued token.
+func TestAuthErrorsNameTheRefusingStep(t *testing.T) {
+	h := newHarness(t, bnet(t), nil)
+	h.tokenFn = func(w http.ResponseWriter, _ *http.Request, _ int64) {
+		writeJSON(w, 401, `{"error":"unauthorized","error_description":"Bad credentials"}`)
+	}
+	_, err := h.c.Character(context.Background(), "Fake Realm", "Alice")
+	if !errors.Is(err, ErrAuth) || !strings.Contains(err.Error(), "token endpoint answered 401") {
+		t.Fatalf("token refusal: %v", err)
+	}
+	h2 := newHarness(t, func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, 401, `{}`) }, nil)
+	_, err = h2.c.Character(context.Background(), "Fake Realm", "Alice")
+	if !errors.Is(err, ErrAuth) || !strings.Contains(err.Error(), "profile API answered 401 twice") {
+		t.Fatalf("API refusal: %v", err)
+	}
+	for _, s := range append(h.secrets(), h2.secrets()...) {
+		if strings.Contains(fmt.Sprint(err), s) {
+			t.Fatal("auth error leaks a credential")
+		}
+	}
 }

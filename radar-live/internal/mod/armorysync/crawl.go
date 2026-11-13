@@ -148,7 +148,7 @@ func (st *runState) expandGuild(ctx context.Context, s domain.ArmorySeed) ([]Cha
 	switch {
 	case err == nil:
 	case st.s.isAuth(err):
-		return nil, &end{status: StatusFailed, err: ErrAuth}
+		return nil, authEnd(err)
 	case ctx.Err() != nil:
 		return nil, &end{status: StatusInterrupted, note: "cancelled"}
 	case st.s.isInvalid(err):
@@ -171,8 +171,8 @@ func (st *runState) expandGuild(ctx context.Context, s domain.ArmorySeed) ([]Cha
 // repeats at most this unit.
 func (st *runState) process(ctx context.Context, refs []CharRef, start, after string) *end {
 	chars, complete, fatal := st.fetchPage(ctx, st.filter(ctx, refs))
-	if fatal {
-		return &end{status: StatusFailed, err: ErrAuth}
+	if fatal != nil {
+		return authEnd(fatal)
 	}
 	next := after
 	if !complete {
@@ -200,7 +200,7 @@ func (st *runState) seedPage(ctx context.Context, cursor string) (domain.ArmoryS
 	case err == nil:
 		return page, nil
 	case st.s.isAuth(err):
-		return page, &end{status: StatusFailed, err: ErrAuth}
+		return page, authEnd(err)
 	case ctx.Err() != nil:
 		return page, &end{status: StatusInterrupted, note: "cancelled"}
 	}

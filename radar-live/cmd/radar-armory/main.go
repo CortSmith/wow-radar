@@ -44,6 +44,9 @@ func run(ctx context.Context, args []string, lookup func(string) (string, bool),
 		fmt.Fprintln(stderr, "radar-armory:", err)
 		return exitFatal
 	}
+	for _, w := range cfg.warnings {
+		fmt.Fprintln(stderr, "radar-armory: warning:", w)
+	}
 	if cfg.showVersion {
 		fmt.Fprintln(stdout, "radar-armory", version)
 		return exitOK

@@ -73,7 +73,7 @@ func (ts *TokenSource) fetch(ctx context.Context) (Secret, error) {
 	}
 	switch {
 	case res.status == http.StatusBadRequest || res.status == http.StatusUnauthorized || res.status == http.StatusForbidden:
-		return Secret{}, ErrAuth
+		return Secret{}, fmt.Errorf("%w: the token endpoint answered %d (client id or secret not accepted; the secret file must hold the client secret, not an access token)", ErrAuth, res.status)
 	case res.status != http.StatusOK:
 		return Secret{}, &StatusError{Code: res.status}
 	}

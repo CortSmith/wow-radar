@@ -31,6 +31,29 @@ written to disk, never logged), refreshed when about 90 % of its lifetime (`expi
 armory answers 401 to a call. Blizzard tokens typically last about 24 hours (UNVERIFIED); a run is far shorter than that. Several
 parallel fetches share one token request.
 
+### Reference OAuth request (verified)
+This is the token request verified against the real token endpoint on 2026-11-12, and the one radar-armory sends
+(`internal/mod/armoryclient`, pinned by `TestTokenRequestMatchesReferenceCurl`). It follows Blizzard's
+[client credentials guide](https://community.developer.battle.net/documentation/guides/using-oauth/client-credentials-flow):
+
+```sh
+curl -u 'CLIENT_ID:CLIENT_SECRET' -d grant_type=client_credentials https://oauth.battle.net/token
+```
+
+POST, HTTP Basic auth with the client id as user and the secret as password, form body exactly
+`grant_type=client_credentials`. The token (about 24 h) is then sent as `Authorization: Bearer TOKEN`. The token URL is
+`https://oauth.battle.net/token` for US, EU and APAC and `https://oauth.battlenet.com.cn/token` for CN; there is no
+per-region token host. To test your own files without typing the values (nothing is echoed or put in an argument):
+
+```sh
+sudo sh -c 'printf "user = \"%s:%s\"\n" "$(tr -d "[:space:]" </etc/radar-live/secrets/armory-client-id)" "$(tr -d "[:space:]" </etc/radar-live/secrets/armory-api-key)" |
+  curl -s -o /dev/null -K - -d grant_type=client_credentials -w "token: HTTP %{http_code}\n" https://oauth.battle.net/token'
+```
+
+`HTTP 200` here but `exit=2` "rejected the client credentials" from radar-armory means radar-armory is not using these
+files: look for a `radar-armory: warning: WOW_ARMORY_API_KEY is set directly and overrides ...` line in the journal and
+remove the plain `WOW_ARMORY_API_KEY` / `WOW_ARMORY_CLIENT_ID` lines (the ones without `_FILE`) from `radar.env`.
+
 ### Get a client id and secret
 1. Sign in at the Battle.net developer portal (`develop.battle.net`) with the Battle.net account that should own the app.
 2. Open "API Access" (or "Clients") and create a client. The name is free; the redirect URL is not used by this program (client
@@ -171,7 +194,8 @@ To rotate the radar-db side, replace the key in `RADAR_INGEST_KEYS` and `RADAR_A
 ## Troubleshooting
 | Symptom in `journalctl -u radar-armory` | Cause and fix |
 |---|---|
-| `exit=2`, armory rejected the client credentials, 401 | Client id or secret wrong, revoked or swapped. Retype both with the recipe (the id goes in `armory-client-id`, the secret in `armory-api-key`), check `RADAR_ARMORY_TOKEN_URL` (a wrong region token host also gives 401) and that the portal client is active. |
+| `warning: WOW_ARMORY_API_KEY is set directly and overrides ..._FILE` | A plain value in `radar.env` (often the `CHANGE_ME` placeholder or an old secret) wins over the secret file. Delete that line, keep the `_FILE` line. |
+| `exit=2`, armory rejected the client credentials, 401 | First run the "Reference OAuth request" file test: if it gives 200, see the warning row above. Otherwise: Client id or secret wrong, revoked or swapped. Retype both with the recipe (the id goes in `armory-client-id`, the secret in `armory-api-key`), check `RADAR_ARMORY_TOKEN_URL` (a wrong region token host also gives 401) and that the portal client is active. |
 | 403 on single characters | Not an error: the character is hidden or private and is stored with status `hidden`. A 403 on every call usually means the client has no access to that API or namespace: check the namespace and region. |
 | 429 or many retries | The client's rate limit. Lower `RADAR_ARMORY_RATE` and `RADAR_ARMORY_CONCURRENCY`. The client honours `Retry-After` and pauses when 429/5xx repeat. |
 | every character is `notfound` or 404 | Wrong region, namespace or realm slug: see "Region and namespace caveat"; set `RADAR_ARMORY_DEFAULT_REALM` in slug form. |
@@ -180,6 +204,7 @@ To rotate the radar-db side, replace the key in `RADAR_INGEST_KEYS` and `RADAR_A
 | radar-db answers 507 | The database is full (`RADAR_DB_MAX_MB`) or the disk is short (`RADAR_DB_MIN_FREE_MB`). The run ends `partial` (exit 1) and resumes later. Free space, see README-xubuntu.md section 6. |
 | radar-db answers 401/403 | `RADAR_ARMORY_DB_KEY` is not one of `RADAR_INGEST_KEYS`. exit 2. |
 | radar-db answers 404 on `/internal/v1/armory/...` | radar-db is too old (no armory store or seeds route); upgrade with `install.sh`. |
+| `exit=2` with `looks like an OAuth access token`, `CHANGE_ME placeholder`, `hold the same value`, `contains spaces` or `contains ':'` | The value is set but cannot work, so the run stops before calling Blizzard. The api-key file must hold the **client secret** from the developer portal, never the `access_token` a token request returns (radar-armory requests its own token every run). Retype the named file with the hidden-typing recipe. |
 | `WOW_ARMORY_CLIENT_ID is not set` | The id file is missing or empty; see "Type the client id and secret". |
 | Timer never fired | `systemctl list-timers radar-armory.timer`: if not listed, it is not enabled (see Enable it). |
 

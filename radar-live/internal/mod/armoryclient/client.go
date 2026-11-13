@@ -349,7 +349,7 @@ func (c *Client) api(ctx context.Context, path, namespace string) (response, err
 		}
 		c.ts.Invalidate(tok)
 		if attempt >= 1 {
-			return response{}, ErrAuth
+			return response{}, fmt.Errorf("%w: a token was issued, but the profile API answered 401 twice (check RADAR_ARMORY_NAMESPACE and the character path)", ErrAuth)
 		}
 	}
 }
