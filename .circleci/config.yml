@@ -62,23 +62,22 @@ jobs:
             export GH_TOKEN="$GITHUB_TOKEN"
             repo="${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}"
             base="https://github.com/${repo}/releases/download/${CIRCLE_TAG}"
-            cat > release-notes.md <<NOTES
-            ## Download the live logging client (players)
-
-            **[radar-client for Windows (${CIRCLE_TAG})](${base}/radar-client-windows-amd64.exe)**
-            ([Linux](${base}/radar-client-linux-amd64)) ·
-            [User guide](${base}/radar-client-guide.md)
-
-            Always the newest official build: https://github.com/${repo}/releases/latest/download/radar-client-windows-amd64.exe
-
-            You need the server address and ingest key from whoever runs your radar server.
-            Check the download against \`SHA256SUMS.release\` below before running it.
-
-            ## Server / operators
-
-            \`radar-live-${CIRCLE_TAG}-dist.tar.gz\` is the full dist: server binaries, deploy files and zone maps.
-            \`SHA256SUMS\` covers every file inside it (used by \`install.sh\`).
-            NOTES
+            {
+              echo "## Download the live logging client (players)"
+              echo
+              echo "**[radar-client for Windows (${CIRCLE_TAG})](${base}/radar-client-windows-amd64.exe)**"
+              echo "([Linux](${base}/radar-client-linux-amd64)) · [User guide](${base}/radar-client-guide.md)"
+              echo
+              echo "Always the newest official build: https://github.com/${repo}/releases/latest/download/radar-client-windows-amd64.exe"
+              echo
+              echo "You need the server address and ingest key from whoever runs your radar server."
+              echo "Check the download against \`SHA256SUMS.release\` below before running it."
+              echo
+              echo "## Server / operators"
+              echo
+              echo "\`radar-live-${CIRCLE_TAG}-dist.tar.gz\` is the full dist: server binaries, deploy files and zone maps."
+              echo "\`SHA256SUMS\` covers every file inside it (used by \`install.sh\`)."
+            } > release-notes.md
             gh release create "$CIRCLE_TAG" release/* \
               --repo "$repo" --verify-tag --title "radar-live ${CIRCLE_TAG}" \
               --notes-file release-notes.md
