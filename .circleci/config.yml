@@ -1,0 +1,94 @@
+# radar-live release pipeline. Runs only for a semver tag (v1.2.3); no branch builds, no other projects.
+#
+# Builds dist/ with scripts/build.sh (all binaries, deploy files, zone maps, SHA256SUMS), then publishes a
+# GitHub release holding the files and a body that links the live logging client (radar-client) for players.
+#
+# Needs one CircleCI project env var: GITHUB_TOKEN (fine-grained PAT, Contents: read/write on the repo).
+version: 2.1
+
+jobs:
+  release:
+    docker:
+      - image: cimg/go:1.27
+    resource_class: medium
+    environment:
+      GH_VERSION: "2.63.2"
+    steps:
+      - checkout
+      - run:
+          name: Check tag is plain semver
+          command: |
+            echo "$CIRCLE_TAG" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
+              || { echo "tag '$CIRCLE_TAG' is not vMAJOR.MINOR.PATCH" >&2; exit 1; }
+      - run:
+          name: Test
+          working_directory: radar-live
+          command: go test -short ./...
+      - run:
+          name: Build dist (binaries, deploy files, maps, SHA256SUMS)
+          working_directory: radar-live
+          command: |
+            sh scripts/build.sh "$CIRCLE_TAG"
+            test -d dist/maps && test "$(ls dist/maps | wc -l)" -gt 0 \
+              || { echo "dist/maps is missing or empty" >&2; exit 1; }
+            test -f dist/radar-client-windows-amd64.exe
+            (cd dist && sha256sum --check --strict SHA256SUMS)
+      - run:
+          name: Package release assets
+          working_directory: radar-live
+          command: |
+            mkdir -p release
+            # Whole server/deploy bundle, maps included.
+            tar -C dist -czf "release/radar-live-${CIRCLE_TAG}-dist.tar.gz" .
+            # Player downloads as standalone files so the links stay short and stable.
+            cp dist/radar-client-windows-amd64.exe release/
+            cp dist/radar-client-linux-amd64 release/
+            cp dist/SHA256SUMS release/SHA256SUMS
+            cp docs/client.md release/radar-client-guide.md
+            (cd release && sha256sum radar-client-* "radar-live-${CIRCLE_TAG}-dist.tar.gz" > SHA256SUMS.release)
+            ls -l release
+      - run:
+          name: Install gh
+          command: |
+            curl -fsSL -o /tmp/gh.tgz \
+              "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz"
+            tar -xzf /tmp/gh.tgz -C /tmp
+            sudo install "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" /usr/local/bin/gh
+      - run:
+          name: Publish GitHub release
+          working_directory: radar-live
+          command: |
+            : "${GITHUB_TOKEN:?set GITHUB_TOKEN in the CircleCI project settings}"
+            export GH_TOKEN="$GITHUB_TOKEN"
+            repo="${CIRCLE_PROJECT_USERNAME}/${CIRCLE_PROJECT_REPONAME}"
+            base="https://github.com/${repo}/releases/download/${CIRCLE_TAG}"
+            cat > release-notes.md <<NOTES
+            ## Download the live logging client (players)
+
+            **[radar-client for Windows (${CIRCLE_TAG})](${base}/radar-client-windows-amd64.exe)**
+            ([Linux](${base}/radar-client-linux-amd64)) ·
+            [User guide](${base}/radar-client-guide.md)
+
+            Always the newest official build: https://github.com/${repo}/releases/latest/download/radar-client-windows-amd64.exe
+
+            You need the server address and ingest key from whoever runs your radar server.
+            Check the download against \`SHA256SUMS.release\` below before running it.
+
+            ## Server / operators
+
+            \`radar-live-${CIRCLE_TAG}-dist.tar.gz\` is the full dist: server binaries, deploy files and zone maps.
+            \`SHA256SUMS\` covers every file inside it (used by \`install.sh\`).
+            NOTES
+            gh release create "$CIRCLE_TAG" release/* \
+              --repo "$repo" --verify-tag --title "radar-live ${CIRCLE_TAG}" \
+              --notes-file release-notes.md
+
+workflows:
+  release:
+    jobs:
+      - release:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/
