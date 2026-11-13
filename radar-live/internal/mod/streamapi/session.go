@@ -29,6 +29,7 @@ type session struct {
 	lim    *limiter // this session's own buckets, nil when the limits are off
 	key    *limiter // the key's shared buckets
 
+	throttleLast  time.Time // when the reader last had to wait; only the reading goroutine
 	throttleSince time.Time // start of the current uninterrupted throttling; only the reading goroutine
 	throttledMs   atomic.Int64
 

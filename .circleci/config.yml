@@ -23,7 +23,7 @@ jobs:
       - run:
           name: Test
           working_directory: radar-live
-          command: go test -short ./...
+          command: go test -short -timeout 10m ./...
       - run:
           name: Build dist (binaries, deploy files, maps, SHA256SUMS)
           working_directory: radar-live

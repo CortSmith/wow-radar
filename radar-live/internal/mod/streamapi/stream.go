@@ -131,11 +131,16 @@ func (m *Module) pump(ctx context.Context, s *session, body *idleReader, maxByte
 // stream has been slowed for longer than the patience, or the end reason when the wait was cut short.
 func (m *Module) throttle(ctx context.Context, s *session, size float64) string {
 	wait, _ := m.charge(s, 1, size, 0)
+	now := m.now()
 	if wait <= 0 {
-		s.throttleSince = time.Time{}
+		// A sender at exactly the limit sees a free line now and then (a sleep overshoots and the bucket
+		// earns a token), so one free line must not restart the patience: only a real pause does.
+		if m.lim.patience <= 0 || now.Sub(s.throttleLast) >= m.lim.patience/2 {
+			s.throttleSince = time.Time{}
+		}
 		return ""
 	}
-	now := m.now()
+	s.throttleLast = now
 	if s.throttleSince.IsZero() {
 		s.throttleSince = now
 	}
