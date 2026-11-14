@@ -1,8 +1,8 @@
 // Package client is the engine behind radar-client, the desktop app that uploads a World of Warcraft
 // combat log to radar-ingest while the game writes it.
 //
-// The pieces: Settings (non-secret preferences kept in a per-user file), KeyStore (the ingest key, memory
-// only), Session (tails the log and streams it through internal/feed), FilePicker (native "Browse..."
+// The pieces: Settings (non-secret preferences kept in a per-user file), KeyStore (the ingest key: memory, or
+// sealed on disk when the user opts in), Session (tails the log and streams it through internal/feed), FilePicker (native "Browse..."
 // dialog) and UIServer (the local, token-protected web UI and its JSON API).
 package client
 
@@ -22,7 +22,7 @@ import (
 const (
 	// EnvServer supplies the default server address.
 	EnvServer = "RADAR_CLIENT_SERVER"
-	// EnvKey supplies the ingest key. The key is never stored anywhere else.
+	// EnvKey supplies the ingest key. The key is stored nowhere else except the opt-in sealed file (savedkey.go).
 	EnvKey = "RADAR_CLIENT_INGEST_KEY"
 	// FallbackServer is used when neither the settings file nor EnvServer names a server.
 	FallbackServer = "http://127.0.0.1:8788"

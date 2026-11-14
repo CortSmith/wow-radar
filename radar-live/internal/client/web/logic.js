@@ -74,7 +74,10 @@ export function startPayload(values) {
     includeExisting: Boolean(values.includeExisting),
   };
   const key = String(values.key || '').trim();
-  if (key) payload.key = key;
+  if (key) {
+    payload.key = key;
+    if (values.remember) payload.remember = true;
+  }
   return payload;
 }
 

@@ -24,6 +24,8 @@
     <label for="key">Ingest key</label>
     <input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Kept in memory for this run only">
     <p class="hint" id="keyHint"></p>
+    <label class="check" id="rememberRow" hidden><input id="rememberKey" type="checkbox"> Remember this key on this device (stored encrypted, never in clear text)</label>
+    <p class="hint" id="forgetRow" hidden>A key is saved on this device. <button id="forgetKey" type="button">Forget saved key</button></p>
 
     <label for="ruleset">Rule-set</label>
     <select id="ruleset">

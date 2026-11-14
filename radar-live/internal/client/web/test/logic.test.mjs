@@ -160,3 +160,9 @@ test('eventLines formats the newest last', () => {
   assert.deepEqual(eventLines(status({ events: [{ timeMs: t, text: 'Started' }, { timeMs: t + 1000, text: 'Uploading' }] })), ['03:04:05  Started', '03:04:06  Uploading']);
   assert.deepEqual(eventLines(status()), []);
 });
+
+test('startPayload sends remember only together with a typed key', () => {
+  assert.equal(startPayload({ ...good, key: ' k ', remember: true }).remember, true);
+  assert.equal('remember' in startPayload({ ...good, key: ' k ', remember: false }), false);
+  assert.equal('remember' in startPayload({ ...good, key: '', remember: true }), false);
+});

@@ -5,7 +5,7 @@ import {
 } from './logic.js';
 
 const POLL_MS = 1000;
-const LOCKED_WHILE_RUNNING = ['server', 'key', 'ruleset', 'logPath', 'browse', 'followNewest', 'includeExisting'];
+const LOCKED_WHILE_RUNNING = ['server', 'key', 'rememberKey', 'forgetKey', 'ruleset', 'logPath', 'browse', 'followNewest', 'includeExisting'];
 const LOG_LABEL_FILE = 'Log file';
 const LOG_LABEL_FOLDER = 'Log folder (or any file in it)';
 
@@ -38,6 +38,7 @@ export function createApp(env) {
     return {
       server: $('server').value, key: $('key').value, ruleset: $('ruleset').value, logPath: $('logPath').value,
       followNewest: $('followNewest').checked, includeExisting: $('includeExisting').checked,
+      remember: $('rememberKey').checked,
     };
   }
 
@@ -57,9 +58,17 @@ export function createApp(env) {
   function renderCapabilities() {
     $('browse').hidden = !view.canBrowse;
     $('quitBtn').hidden = !view.canQuit;
-    $('keyHint').textContent = view.keySource === 'env'
-      ? 'Using the key from RADAR_CLIENT_INGEST_KEY. Type a key here to use another one for this run.'
-      : 'The key is kept in memory for this run only and is never saved.';
+    if (view.keySource === 'env') {
+      $('keyHint').textContent = 'Using the key from RADAR_CLIENT_INGEST_KEY. Type a key here to use another one for this run.';
+    } else if (view.keySource === 'saved') {
+      $('keyHint').textContent = 'Using the key saved on this device. Type a key here to replace it for this run.';
+    } else if (view.canSaveKey) {
+      $('keyHint').textContent = 'The key is kept in memory for this run unless you tick "Remember" below.';
+    } else {
+      $('keyHint').textContent = 'The key is kept in memory for this run only and is never saved.';
+    }
+    $('rememberRow').hidden = !view.canSaveKey;
+    $('forgetRow').hidden = !view.keySaved;
     const warning = view.warning || '';
     $('loadWarning').hidden = !warning;
     $('loadWarning').textContent = warning;
@@ -122,9 +131,20 @@ export function createApp(env) {
       return;
     }
     $('key').value = ''; // the server holds the key in memory now
+    $('rememberKey').checked = false;
     if (res.data.warning) $('formMsg').textContent = res.data.warning;
     renderStatus(res.data);
     await loadSettings();
+  }
+
+  async function onForgetKey() {
+    const res = await api('DELETE', '/api/key/saved');
+    if (res.ok) {
+      view = res.data;
+      renderCapabilities();
+    } else {
+      $('formMsg').textContent = res.data.message || 'Could not forget the saved key.';
+    }
   }
 
   async function onStop() {
@@ -165,6 +185,7 @@ export function createApp(env) {
     $('stopBtn').addEventListener('click', onStop);
     $('browse').addEventListener('click', onBrowse);
     $('quitBtn').addEventListener('click', onQuit);
+    $('forgetKey').addEventListener('click', onForgetKey);
     $('followNewest').addEventListener('change', updateLogLabel);
     $('server').addEventListener('input', () => showMessages(validateForm(readForm(), { keySource: view.keySource })));
     await refreshStatus();

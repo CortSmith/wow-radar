@@ -20,11 +20,22 @@ Linux: run `./radar-client-linux-amd64`; it prints the page address and opens th
 
 ### The key
 
-The key is never written to disk. Either:
+By default the key is never written to disk. Either:
 
 - set the environment variable before starting the program (PowerShell: `$env:RADAR_CLIENT_INGEST_KEY = "<your key>"; .\radar-client-windows-amd64.exe`), or
-- type it into the **Ingest key** field. It stays in the program's memory until you close it; there is no "remember key".
-  Next time you start, type it again (or use the variable).
+- type it into the **Ingest key** field. It stays in the program's memory until you close it. To keep it for next time, tick **Remember this key on this device** before **Start**
+  (see "Saved key" below).
+  Next time you start, type it again, use the variable, or save it (below).
+
+### Saved key (optional)
+
+Tick **Remember this key on this device** when you press **Start** and the key is stored in `%APPDATA%\RadarClient\ingest-key.bin`.
+It is never in clear text: on Windows it is sealed with DPAPI for your Windows user, so only you on this computer can open it
+(another user or a copied file cannot). On Linux it is only obfuscated (AES-GCM under a key derived from the host and user
+name): that hides it from a text editor or a backup browse, but anyone running code as you can recover it. Use the
+environment variable instead if that is not enough. Order of use: a key typed this run, then `RADAR_CLIENT_INGEST_KEY`, then the
+saved key. **Forget saved key** deletes the file. Tests: `TestSavedKeySurvivesARestartAndIsNotInClearText`,
+`TestRememberedKeyIsSavedSealedAndCanBeForgotten`.
 
 There is no `--key` option (command lines show up in process lists): `radar-client --key ...` stops with a message naming
 `RADAR_CLIENT_INGEST_KEY`. Tests: `TestKeyNeverAppearsInAnyReply`, `TestSecretFlagsAreRefusedWithAPointerToTheEnvVar`, `TestPutSettingsValidatesSavesAndNeverStoresTheKey`.

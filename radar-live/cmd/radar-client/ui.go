@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 
 	"radarlive/internal/client"
 )
@@ -30,9 +31,15 @@ func newUI(cfg config, d deps, session *client.Session, quit context.CancelFunc)
 	host, _ := d.hostname()
 	picker := client.NewNativePicker()
 	token := client.NewToken()
+	keys := client.NewKeyStore(d.lookup)
+	if settingsPath != "" {
+		if err := keys.EnableSaved(client.SavedKeyPath(settingsPath)); err != nil {
+			warning = strings.TrimSpace(warning + " " + err.Error())
+		}
+	}
 	server := client.NewUIServer(client.UIOptions{
 		Settings: settings, SettingsWarn: warning, SettingsPath: settingsPath,
-		Keys: client.NewKeyStore(d.lookup), Session: session, Picker: picker, CanBrowse: client.CanBrowse(picker),
+		Keys: keys, Session: session, Picker: picker, CanBrowse: client.CanBrowse(picker),
 		Token: token, Source: client.DefaultSource(host), Version: version, Quit: quit,
 	})
 	return &ui{server: server, token: token}, nil

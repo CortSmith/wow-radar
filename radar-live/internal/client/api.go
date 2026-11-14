@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 )
 
 // settingsView is what GET /api/settings returns: the settings plus facts the page needs. The ingest
@@ -12,6 +13,8 @@ import (
 type settingsView struct {
 	Settings
 	KeySource string `json:"keySource"`
+	KeySaved  bool   `json:"keySaved"`   // a key is remembered on this device
+	CanSave   bool   `json:"canSaveKey"` // "Remember on this device" is available
 	CanBrowse bool   `json:"canBrowse"`
 	CanQuit   bool   `json:"canQuit"`
 	Version   string `json:"version"`
@@ -21,7 +24,8 @@ type settingsView struct {
 // startRequest is the body of POST /api/start: the settings and, optionally, a key typed this run.
 type startRequest struct {
 	Settings
-	Key string `json:"key"`
+	Key      string `json:"key"`
+	Remember bool   `json:"remember"` // also store the typed key, sealed, for the next runs
 }
 
 type startResponse struct {
@@ -30,7 +34,8 @@ type startResponse struct {
 }
 
 type keyRequest struct {
-	Key string `json:"key"`
+	Key      string `json:"key"`
+	Remember bool   `json:"remember"`
 }
 
 type pickRequest struct {
@@ -47,6 +52,7 @@ func (u *UIServer) routeAPI(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/settings", u.handleGetSettings)
 	mux.HandleFunc("PUT /api/settings", u.handlePutSettings)
 	mux.HandleFunc("PUT /api/key", u.handlePutKey)
+	mux.HandleFunc("DELETE /api/key/saved", u.handleForgetKey)
 	mux.HandleFunc("POST /api/start", u.handleStart)
 	mux.HandleFunc("POST /api/stop", u.handleStop)
 	mux.HandleFunc("GET /api/status", u.handleStatus)
@@ -59,7 +65,7 @@ func (u *UIServer) view() settingsView {
 	cur := u.current
 	u.mu.Unlock()
 	return settingsView{
-		Settings: cur, KeySource: u.opts.Keys.Source(), CanBrowse: u.opts.CanBrowse,
+		Settings: cur, KeySource: u.opts.Keys.Source(), KeySaved: u.opts.Keys.HasSaved(), CanSave: u.opts.Keys.CanSave(), CanBrowse: u.opts.CanBrowse,
 		CanQuit: u.opts.Quit != nil, Version: u.opts.Version, Warning: u.opts.SettingsWarn,
 	}
 }
@@ -109,7 +115,21 @@ func (u *UIServer) handlePutKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u.opts.Keys.Set(req.Key)
+	if req.Remember {
+		if err := u.opts.Keys.Remember(req.Key); err != nil {
+			writeError(w, http.StatusInternalServerError, "save_key_failed", "The key could not be saved: "+err.Error())
+			return
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"keySource": u.opts.Keys.Source()})
+}
+
+func (u *UIServer) handleForgetKey(w http.ResponseWriter, _ *http.Request) {
+	if err := u.opts.Keys.Forget(); err != nil {
+		writeError(w, http.StatusInternalServerError, "forget_key_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, u.view())
 }
 
 func (u *UIServer) handleStart(w http.ResponseWriter, r *http.Request) {
@@ -122,8 +142,14 @@ func (u *UIServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_settings", err.Error())
 		return
 	}
+	keyWarn := ""
 	if req.Key != "" {
 		u.opts.Keys.Set(req.Key)
+		if req.Remember {
+			if err := u.opts.Keys.Remember(req.Key); err != nil {
+				keyWarn = "The key could not be saved: " + err.Error() + " "
+			}
+		}
 	}
 	err := u.opts.Session.Start(StartConfig{Settings: s, Key: u.opts.Keys.Key(), Source: u.opts.Source})
 	if errors.Is(err, ErrAlreadyRunning) {
@@ -135,7 +161,7 @@ func (u *UIServer) handleStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u.setCurrent(s)
-	writeJSON(w, http.StatusAccepted, startResponse{Status: u.opts.Session.Status(), Warning: u.save(s)})
+	writeJSON(w, http.StatusAccepted, startResponse{Status: u.opts.Session.Status(), Warning: strings.TrimSpace(keyWarn + u.save(s))})
 }
 
 func (u *UIServer) handleStop(w http.ResponseWriter, _ *http.Request) {

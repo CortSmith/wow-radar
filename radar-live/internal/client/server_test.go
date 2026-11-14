@@ -541,3 +541,53 @@ func TestKeyNeverAppearsInAnyReply(t *testing.T) {
 		t.Errorf("settings file holds the key: %s", saved)
 	}
 }
+
+func TestRememberedKeyIsSavedSealedAndCanBeForgotten(t *testing.T) {
+	r := newUIRig(t)
+	keyFile := SavedKeyPath(r.settingsFile)
+	if err := r.keys.EnableSaved(keyFile); err != nil {
+		t.Fatal(err)
+	}
+	// Without "remember" nothing is written.
+	if code, body := r.do(t, "PUT", "/api/key", map[string]any{"key": fakeKey}); code != 200 {
+		t.Fatalf("put: %d %s", code, body)
+	}
+	if _, err := os.Stat(keyFile); err == nil {
+		t.Fatal("a key typed without 'remember' was written to disk")
+	}
+	// With "remember" it is saved, sealed, and never echoed.
+	code, body := r.do(t, "PUT", "/api/key", map[string]any{"key": fakeKey, "remember": true})
+	if code != 200 || strings.Contains(string(body), fakeKey) {
+		t.Fatalf("remember: %d %s", code, body)
+	}
+	raw, err := os.ReadFile(keyFile)
+	if err != nil || strings.Contains(string(raw), fakeKey) {
+		t.Fatalf("key file missing or in clear text: %v", err)
+	}
+	code, body = r.do(t, "GET", "/api/settings", nil)
+	if code != 200 || strings.Contains(string(body), fakeKey) {
+		t.Fatalf("settings: %d %s", code, body)
+	}
+	v := decode[settingsView](t, body)
+	if !v.KeySaved || !v.CanSave {
+		t.Fatalf("view does not report the saved key: %+v", v)
+	}
+	// Forget removes it.
+	if code, body = r.do(t, "DELETE", "/api/key/saved", nil); code != 200 {
+		t.Fatalf("forget: %d %s", code, body)
+	}
+	if _, err := os.Stat(keyFile); err == nil {
+		t.Fatal("the saved key file survived 'forget'")
+	}
+	if decode[settingsView](t, body).KeySaved {
+		t.Fatal("view still reports a saved key")
+	}
+}
+
+func TestRememberWithoutSupportIsRefused(t *testing.T) {
+	r := newUIRig(t) // EnableSaved was not called
+	code, body := r.do(t, "PUT", "/api/key", map[string]any{"key": fakeKey, "remember": true})
+	if code != http.StatusInternalServerError || strings.Contains(string(body), fakeKey) {
+		t.Fatalf("%d %s", code, body)
+	}
+}
