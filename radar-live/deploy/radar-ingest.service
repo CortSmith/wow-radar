@@ -23,8 +23,11 @@ Restart=on-failure
 RestartSec=3
 TimeoutStopSec=20
 
-# Ingest writes no data: no ReadWritePaths, no StateDirectory. Only its own security log
-# (/var/log/radar/security-ingest.log) and a private runtime dir are writable.
+# Ingest writes no data and has no StateDirectory. Writable: its own security log (/var/log/radar/security-ingest.log),
+# a private runtime dir and the per-key usage directory (keyusage.json for radar-keys: ids and counters only; install.sh
+# creates it, owner radar 0700). It only READS the keyring (/var/lib/radar-keys/keyring, root:radar 0750) and cannot
+# reach the key vault (root only).
+ReadWritePaths=/var/lib/radar-keys/usage
 LogsDirectory=radar
 LogsDirectoryMode=0700
 RuntimeDirectory=radar-ingest

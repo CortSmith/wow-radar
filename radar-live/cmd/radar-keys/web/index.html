@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="radar-token" content="{{.Token}}">
+<title>Radar Keys</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Radar Keys</h1>
+  <div class="row">
+    <button class="btn primary" id="newBtn" type="button">New key</button>
+    <button class="btn" id="refreshBtn" type="button">Refresh</button>
+  </div>
+</header>
+
+<section class="panel toolbar" aria-label="Filter">
+  <input id="search" type="text" spellcheck="false" autocomplete="off" placeholder="Search email, player, tag, notes" aria-label="Search">
+  <select id="tagFilter" aria-label="Filter by tag"></select>
+  <span class="hint" id="countText"></span>
+</section>
+<p class="msg error" id="pageMsg" role="alert"></p>
+
+<section class="panel tablewrap" aria-label="Keys">
+  <table>
+    <thead>
+      <tr>
+        <th>Enabled</th><th>Key</th><th>Email</th><th>Player</th><th>Tags</th><th>Created</th>
+        <th>Last seen</th><th>Lines today</th><th>Rate limit</th><th>Status</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p class="hint" id="emptyText" hidden>No keys match.</p>
+</section>
+
+<div class="overlay" id="editDlg" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" hidden>
+  <div class="dialog">
+    <h2 id="dlgTitle">New key</h2>
+    <label for="fEmail">Email (required)</label>
+    <input id="fEmail" type="text" autocomplete="off" spellcheck="false">
+    <p class="msg error" id="eEmail"></p>
+
+    <label for="fPlayer">Player name</label>
+    <input id="fPlayer" type="text" autocomplete="off" spellcheck="false">
+
+    <label for="fTags">Tags (comma or Enter)</label>
+    <input id="fTags" type="text" autocomplete="off" spellcheck="false">
+
+    <label for="fNotes">Notes</label>
+    <input id="fNotes" type="text" autocomplete="off">
+
+    <label for="fExpires">Expires (optional)</label>
+    <input id="fExpires" type="date">
+    <p class="msg error" id="eExpires"></p>
+
+    <h3>Rate limits (blank = server default)</h3>
+    <div class="grid">
+      <div><label for="fLineRate">Lines/s</label><input id="fLineRate" type="text" inputmode="numeric" autocomplete="off"><p class="msg error" id="eLineRate"></p></div>
+      <div><label for="fLineBurst">Burst (lines)</label><input id="fLineBurst" type="text" inputmode="numeric" autocomplete="off"><p class="msg error" id="eLineBurst"></p></div>
+      <div><label for="fByteRate">Bytes/s</label><input id="fByteRate" type="text" inputmode="numeric" autocomplete="off"><p class="msg error" id="eByteRate"></p></div>
+      <div><label for="fByteBurst">Byte burst</label><input id="fByteBurst" type="text" inputmode="numeric" autocomplete="off"><p class="msg error" id="eByteBurst"></p></div>
+      <div><label for="fMaxStreams">Max simultaneous streams</label><input id="fMaxStreams" type="text" inputmode="numeric" autocomplete="off"><p class="msg error" id="eMaxStreams"></p></div>
+    </div>
+
+    <label class="check" id="keepCopyRow"><input id="fKeepCopy" type="checkbox" checked> Keep a recoverable copy so I can view it later</label>
+
+    <p class="msg error" id="dlgErr"></p>
+    <div class="row buttons">
+      <button class="btn primary" id="dlgSave" type="button">Create</button>
+      <button class="btn" id="dlgCancel" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="keyDlg" role="dialog" aria-modal="true" aria-labelledby="keyDlgTitle" hidden>
+  <div class="dialog">
+    <h2 id="keyDlgTitle">Your new key</h2>
+    <p class="warn">Copy the key now. If no recoverable copy was kept, it cannot be shown again.</p>
+    <code class="keybox" id="newKeyText"></code>
+    <p class="hint">The player enters it in the radar-client "Ingest key" field, or sets <code>RADAR_FEED_KEY</code> for radar-feed.</p>
+    <p class="msg" id="copyMsg"></p>
+    <div class="row buttons">
+      <button class="btn primary" id="copyNewKey" type="button">Copy</button>
+      <button class="btn" id="closeKey" type="button">Done</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

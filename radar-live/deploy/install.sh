@@ -12,6 +12,7 @@
 #           --with-fail2ban         also install the fail2ban filter and jail for the security log
 # A 'maps' folder next to this script (zone images + index.json, built with --with-maps) is checked and
 # installed read-only into /var/lib/radar-live/maps.
+# radar-keys (the API key manager, docs/keys.md) is installed too; its files live in /var/lib/radar-keys.
 # Afterwards:  sudo sh verify-hardening.sh   (docs/security/hardening.md explains every check)
 set -eu
 # Files created below (the settings file with the keys) start private; modes are then set explicitly.
@@ -27,7 +28,18 @@ ARMORY_ID_FILE=$SECRETS_DIR/armory-client-id
 ARMORY_KEY_FILE=$SECRETS_DIR/armory-api-key
 DATA_DIR=/var/lib/radar-live
 MAPS_DIR=$DATA_DIR/maps
+# API key manager layout (docs/keys.md). radar-keys runs as root (sudo); radar-ingest runs as $SVC_USER.
+#   keyring/  root:radar 0750   keyring.json 0640 root:radar (hashes only; written by radar-keys, read by radar-ingest)
+#   usage/    radar:radar 0700  keyusage.json 0600 radar:radar (written by radar-ingest, read by radar-keys)
+#   vault/    root:root 0700    keyvault.bin + keyvault.key 0600 root:root (NOT readable by the service user)
+KEYS_DIR=/var/lib/radar-keys
+KEYRING_DIR=$KEYS_DIR/keyring
+USAGE_DIR=$KEYS_DIR/usage
+VAULT_DIR=$KEYS_DIR/vault
+KEYRING_FILE=$KEYRING_DIR/keyring.json
+USAGE_FILE=$USAGE_DIR/keyusage.json
 BACKUP_DIR=/var/backups/radar-live
+KEYS_BACKUP_DIR=$BACKUP_DIR/keys
 LOG_DIR=/var/log/radar
 DOC_DIR=/usr/local/share/doc/radar-live
 UNIT_DIR=/etc/systemd/system
@@ -73,7 +85,7 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         -h | --help)
-            sed -n '2,18p' "$0"
+            sed -n '2,19p' "$0"
             exit 0
             ;;
         *) die "unknown option: $1" ;;
@@ -98,7 +110,7 @@ if [ -z "$arch" ]; then
 fi
 case $arch in amd64 | arm64) ;; *) die "--arch must be amd64 or arm64" ;; esac
 
-files="radar-db-linux-$arch radar-ingest-linux-$arch radar-armory-linux-$arch radar.env.example radar-db.service radar-ingest.service radar-armory.service radar-armory.timer"
+files="radar-db-linux-$arch radar-ingest-linux-$arch radar-armory-linux-$arch radar-keys-linux-$arch backup-keys.sh radar.env.example radar-db.service radar-ingest.service radar-armory.service radar-armory.timer"
 [ -z "$ufw_cidr" ] || files="$files ufw-setup.sh"
 for f in $files; do
     [ -f "$src/$f" ] || die "missing $src/$f (copy the whole dist folder)"
@@ -144,6 +156,12 @@ install -d -o "$SVC_USER" -g "$SVC_USER" -m 0700 "$LOG_DIR"
 install -d -o root -g "$SVC_USER" -m 0750 "$ETC_DIR"
 install -d -o root -g "$SVC_USER" -m 0750 "$SECRETS_DIR"
 install -d -m 0755 "$DOC_DIR"
+# Key manager directories. $KEYS_DIR itself is only traversable (the service user must reach keyring/ and usage/).
+install -d -o root -g root -m 0755 "$KEYS_DIR"
+install -d -o root -g "$SVC_USER" -m 0750 "$KEYRING_DIR"
+install -d -o "$SVC_USER" -g "$SVC_USER" -m 0700 "$USAGE_DIR"
+install -d -o root -g root -m 0700 "$VAULT_DIR"
+install -d -o root -g root -m 0700 "$KEYS_BACKUP_DIR"
 # Zone maps: owned by root, so the service (user radar) can read them but never change them.
 install -d -o root -g root -m 0755 "$MAPS_DIR"
 
@@ -155,6 +173,9 @@ install_bin() {
 install_bin radar-db
 install_bin radar-ingest
 install_bin radar-armory
+install_bin radar-keys
+install -d -m 0755 /usr/local/sbin
+install -m 0755 -o root -g root "$src/backup-keys.sh" /usr/local/sbin/radar-keys-backup
 
 if [ -n "$map_files" ]; then
     echo "installing zone maps into $MAPS_DIR"
@@ -187,8 +208,32 @@ else
     mv -f "$tmp" "$ENV_FILE"
     new_keys=yes
 fi
+# Key manager settings: a fresh install gets them from the example file; an existing file only gets them when absent.
+if ! grep -q '^RADAR_KEYRING_FILE=' "$ENV_FILE"; then
+    printf '\n# radar-keys (docs/keys.md)\nRADAR_KEYRING_FILE=%s\n' "$KEYRING_FILE" >>"$ENV_FILE"
+fi
+if ! grep -q '^RADAR_KEYUSAGE_FILE=' "$ENV_FILE"; then
+    printf 'RADAR_KEYUSAGE_FILE=%s\n' "$USAGE_FILE" >>"$ENV_FILE"
+fi
+# keyring.json is created empty once (radar-ingest reads it; radar-keys keeps its owner and mode when it rewrites it).
+if [ ! -f "$KEYRING_FILE" ]; then
+    printf '{"version":1,"keys":[]}\n' >"$KEYRING_FILE"
+fi
+chown root:"$SVC_USER" "$KEYRING_FILE"
+chmod 0640 "$KEYRING_FILE"
+# The other key files: only owner and mode are asserted, never the contents.
+for f in "$KEYRING_FILE.lock" "$VAULT_DIR/keyvault.bin" "$VAULT_DIR/keyvault.key"; do
+    if [ -f "$f" ]; then
+        chown root:root "$f"
+        chmod 0600 "$f"
+    fi
+done
+if [ -f "$USAGE_FILE" ]; then
+    chown "$SVC_USER":"$SVC_USER" "$USAGE_FILE"
+    chmod 0600 "$USAGE_FILE"
+fi
 install -m 0644 "$src/radar.env.example" "$ETC_DIR/radar.env.example"
-for doc in README-xubuntu.md backup.cron ufw-setup.sh verify-hardening.sh armory.md; do
+for doc in README-xubuntu.md backup.cron ufw-setup.sh verify-hardening.sh armory.md keys.md; do
     if [ -f "$src/$doc" ]; then install -m 0644 "$src/$doc" "$DOC_DIR/$doc"; fi
 done
 # The armory secret files, when the operator has put them there: only mode and owner are asserted (never the contents).
@@ -268,6 +313,7 @@ echo "  status:   systemctl status radar-db radar-ingest"
 echo "  logs:     journalctl -u radar-db -u radar-ingest -f"
 echo "  settings: $ENV_FILE"
 echo "  audit:    sudo sh $DOC_DIR/verify-hardening.sh"
+echo "  keys:     sudo radar-keys   (per-player ingest keys, no restart needed; guide: $DOC_DIR/keys.md)"
 if [ "$armory_timer" = yes ]; then
     echo "  armory:   nightly sync enabled (systemctl list-timers radar-armory.timer; guide: $DOC_DIR/armory.md)"
 else

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"radarlive/internal/core"
@@ -19,6 +20,7 @@ const (
 	endedMaxBytes = "max-bytes"
 	endedShutdown = "shutdown"
 	endedError    = "error"
+	endedBlocked  = "blocked"
 )
 
 // idleReader arms a read deadline before every read, so a silent client is cut off after idle. A line
@@ -31,8 +33,9 @@ type idleReader struct {
 	lineTimeout time.Duration   // 0 = off
 	done        context.Context // run context; when it ends the deadline is pulled to "now"
 	n           int64
-	partial     time.Time // when the unfinished line began, zero between lines
-	slow        bool      // the stream was cut by lineTimeout
+	partial     time.Time    // when the unfinished line began, zero between lines
+	slow        bool         // the stream was cut by lineTimeout
+	blocked     *atomic.Bool // set when the key was blocked; the deadline is then pulled to "now"
 }
 
 func (i *idleReader) Read(p []byte) (int, error) {
@@ -48,7 +51,7 @@ func (i *idleReader) Read(p []byte) (int, error) {
 		}
 	}
 	_ = i.rc.SetReadDeadline(deadline)
-	if i.done.Err() != nil {
+	if i.done.Err() != nil || (i.blocked != nil && i.blocked.Load()) {
 		_ = i.rc.SetReadDeadline(time.Now())
 	}
 	n, err := i.r.Read(p)
@@ -86,13 +89,19 @@ func (m *Module) handleStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer m.registry().close(s)
+	m.trackUsage(s)
 	cfg := m.host.Config
 	rc := http.NewResponseController(w)
 	run := m.running()
 	stop := context.AfterFunc(run, func() { _ = rc.SetReadDeadline(time.Now()) })
 	defer stop()
-	body := &idleReader{r: r.Body, rc: rc, idle: cfg.Duration(SettingStreamIdle), lineTimeout: m.lim.lineTimeout, done: run}
-	ended := m.pump(r.Context(), s, body, int64(cfg.Int(SettingStreamBytes)), run)
+	body := &idleReader{r: r.Body, rc: rc, idle: cfg.Duration(SettingStreamIdle), lineTimeout: m.lim.lineTimeout, done: run, blocked: &s.blocked}
+	ctx, cancel := context.WithCancel(r.Context())
+	defer cancel()
+	if s.ring != "" {
+		go m.watchKey(ctx, s, func() { cancel(); _ = rc.SetReadDeadline(time.Now()) })
+	}
+	ended := m.pump(ctx, s, body, int64(cfg.Int(SettingStreamBytes)), run)
 	_ = rc.SetReadDeadline(time.Time{})
 	core.WriteJSON(w, http.StatusOK, s.summary(m.now(), ended))
 }
@@ -106,6 +115,9 @@ func (m *Module) pump(ctx context.Context, s *session, body *idleReader, maxByte
 	for {
 		line, tooLong, err := lr.next()
 		if err != nil {
+			if s.blocked.Load() {
+				return endedBlocked
+			}
 			if body.slow {
 				return endedSlow
 			}
@@ -114,7 +126,9 @@ func (m *Module) pump(ctx context.Context, s *session, body *idleReader, maxByte
 		if ended := m.throttle(ctx, s, float64(body.n-charged)); ended != "" {
 			return ended
 		}
+		size := body.n - charged
 		charged = body.n
+		m.countUsage(s, 1, size)
 		if tooLong {
 			s.rejected.Add(1)
 			s.lines.Add(1)
@@ -149,6 +163,9 @@ func (m *Module) throttle(ctx context.Context, s *session, size float64) string 
 	}
 	s.throttledMs.Add(wait.Milliseconds())
 	if err := m.sleep(ctx, m.running(), wait); err != nil {
+		if s.blocked.Load() {
+			return endedBlocked
+		}
 		if m.running().Err() != nil {
 			return endedShutdown
 		}
@@ -167,4 +184,30 @@ func endReason(err error, run context.Context) string {
 		return endedIdle
 	}
 	return endedError
+}
+
+// watchKey polls the keyring state of the stream's key every keyTick until ctx ends. A key that is no
+// longer active (disabled, expired or removed) marks the session blocked and calls onBlock to cut
+// the stream; a changed limit is applied to the key's shared buckets. One goroutine per stream, so
+// the line path does no lookup.
+func (m *Module) watchKey(ctx context.Context, s *session, onBlock func()) {
+	t := time.NewTicker(m.keyTick)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+		info, active, ok := m.host.Auth.LookupKey(s.ring)
+		switch {
+		case !ok:
+			return
+		case !active:
+			s.blocked.Store(true)
+			onBlock()
+			return
+		}
+		m.registry().applyLimits(s.keyID, info.Limits, m.now())
+	}
 }

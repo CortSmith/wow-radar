@@ -124,8 +124,9 @@ func TestUnitWritablePaths(t *testing.T) {
 		t.Errorf("radar-db StateDirectoryMode = %q", got)
 	}
 	ing := unit(t, "radar-ingest.service")
-	if _, ok := ing["ReadWritePaths"]; ok {
-		t.Error("radar-ingest writes nothing: no ReadWritePaths")
+	// Ingest writes only keyusage.json (key manager), in its own directory; never the data directory.
+	if got := ing["ReadWritePaths"]; len(got) != 1 || got[0] != "/var/lib/radar-keys/usage" {
+		t.Errorf("radar-ingest ReadWritePaths = %q, want only /var/lib/radar-keys/usage", got)
 	}
 	if _, ok := ing["StateDirectory"]; ok {
 		t.Error("radar-ingest has no state directory")
@@ -190,7 +191,7 @@ func TestInstallCreatesRestrictedUser(t *testing.T) {
 }
 
 func scripts() []string {
-	return []string{"install.sh", "uninstall.sh", "ufw-setup.sh", "verify-hardening.sh"}
+	return []string{"install.sh", "uninstall.sh", "ufw-setup.sh", "verify-hardening.sh", "backup-keys.sh"}
 }
 
 // TestShellScriptsParse runs `sh -n` (dash on the laptop) on every script when a POSIX shell exists.

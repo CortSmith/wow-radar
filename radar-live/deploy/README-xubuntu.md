@@ -211,3 +211,13 @@ journalctl -u radar-armory -n 30 --no-pager    # one-line summary, exit 0 ok / 1
 Both values are typed hidden into their files, never put in `radar.env` or on a command line. The full guide (how to get a
 client id and secret, hidden-typing recipe, rotation, 401/403/429/507 troubleshooting, what is stored, the provisional API shape) is `docs/armory.md`, installed as
 `/usr/local/share/doc/radar-live/armory.md`. The nightly backup (03:17) may overlap a long run; that is safe.
+
+## 11. Player keys (radar-keys)
+
+`install.sh` also installs `radar-keys`, the key manager: one ingest key per player, blocked or regenerated without restarting radar-ingest.
+Run it on the laptop with `sudo radar-keys` (a loopback web page; `sudo radar-keys list|add|block|unblock|delete|regen` for SSH and scripts).
+Files: `/var/lib/radar-keys/keyring/keyring.json` (0640 root:radar, hashes only, radar-ingest reads it), `/var/lib/radar-keys/usage/keyusage.json`
+(written by radar-ingest) and `/var/lib/radar-keys/vault/` (0700 root only: the sealed copies of the keys and the sealing key `keyvault.key`).
+The nightly `radar-keys-backup` (root, 03:27) copies the keyring and the vault to `/var/backups/radar-live/keys` but never the sealing key; a
+restore needs both. Everything, including the honest limits of the "eye" button, is in `docs/keys.md`
+(installed as `/usr/local/share/doc/radar-live/keys.md`).

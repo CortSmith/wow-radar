@@ -71,7 +71,13 @@ func exe(name string) string {
 // buildBinaries compiles the three commands into dir with the same flags as the release build.
 func buildBinaries(t *testing.T, root, dir string) {
 	t.Helper()
-	for _, name := range []string{"radar-db", "radar-ingest", "radar-feed"} {
+	buildNamed(t, root, dir, "radar-db", "radar-ingest", "radar-feed")
+}
+
+// buildNamed compiles the named commands into dir.
+func buildNamed(t *testing.T, root, dir string, names ...string) {
+	t.Helper()
+	for _, name := range names {
 		ctx, cancel := context.WithTimeout(context.Background(), buildTimeout)
 		cmd := exec.CommandContext(ctx, "go", "build", "-trimpath", "-ldflags", "-s -w", "-o", filepath.Join(dir, exe(name)), "./cmd/"+name)
 		cmd.Dir = root

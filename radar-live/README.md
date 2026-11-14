@@ -74,6 +74,12 @@ One ingest key is shared: `RADAR_INGEST_KEYS` (both servers check it), `RADAR_DB
 and the feeder sends it as `X-Ingest-Key`. The page uses a separate view key (`RADAR_VIEW_KEYS`). `radar-db keygen` makes keys.
 With no keys configured the API is open and a warning is logged.
 
+**One key per player (`radar-keys`).** For more than one player, use the key manager instead of sharing one key: `sudo radar-keys` opens a
+local page (or use `radar-keys add|block|unblock|delete|regen|list`) to create keys with an e-mail, tags, an optional expiry and their own rate
+limits, and to block one without restarting anything (radar-ingest re-reads `keyring.json` every 2 s; a blocked key gets 403 `key_disabled`
+and its open streams end with `blocked`). The env keys above keep working. Settings `RADAR_KEYRING_FILE` and `RADAR_KEYUSAGE_FILE`
+(`keyring-file`, `keyusage-file`). Guide, file layout, permissions and backup caveat: [docs/keys.md](docs/keys.md).
+
 **Secrets rule** (`docs/security/secrets-policy.md`): keys and tokens are environment variables (or a `*_FILE` variable naming a
 file outside the repo). No command-line flag accepts a secret: `--view-keys`, `--ingest-keys`, `--db-key`, `radar-feed --key` and
 `radar-client --key` stop with a message naming the variable. `--help` shows secrets as `<set>`/`<unset>` only. Before committing run
@@ -156,7 +162,7 @@ already written to a connection that then breaks is not resent, because ingest a
 address and ingest key, pick the combat log (or "use newest log in folder"), press **Start**. It uploads whenever WoW writes
 new lines and shows live status. One exe, no installer, no cgo; the window is WebView2 (present on Windows 11), with the
 default browser as fallback, and a Linux build runs the same UI in the browser. The ingest key is read from
-`RADAR_CLIENT_INGEST_KEY` or typed into the window for that run; it is never saved. User guide, troubleshooting and the
+`RADAR_CLIENT_INGEST_KEY` or typed into the window for that run; it is saved only if you tick "Remember this key on this device" (stored encrypted). User guide, troubleshooting and the
 smoke test: [docs/client.md](docs/client.md).
 
 ## API summary

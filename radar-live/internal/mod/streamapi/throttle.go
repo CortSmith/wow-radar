@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"net/http"
 	"sync"
 	"time"
 
+	"radarlive/internal/core"
 	"radarlive/internal/netx"
 )
 
@@ -154,6 +156,7 @@ func (m *Module) limits() (limits, error) {
 // keyState is what the registry remembers per ingest key: its shared limiter and open count.
 type keyState struct {
 	lim     *limiter
+	cur     keyLim // the numbers lim was built or last reconfigured with
 	streams int
 	used    time.Time
 }
@@ -188,4 +191,49 @@ func (m *Module) charge(s *session, lines, bytes float64, maxWait time.Duration)
 		s.key.take(lines, bytes)
 	}
 	return w, true
+}
+
+// keyLim are the numbers that apply to one key: the global defaults with the keyring overrides on top.
+type keyLim struct{ lineRate, lineBurst, byteRate, byteBurst, maxStreams int }
+
+// keyLimits resolves the limits of a key: only a keyring key can override the defaults.
+func (l limits) keyLimits(info core.KeyInfo, fromRing bool) keyLim {
+	k := keyLim{l.keyLineRate, l.keyLineBurst, l.keyByteRate, l.keyBytes, l.maxPerKey}
+	if !fromRing {
+		return k
+	}
+	over := func(dst *int, v *int64) {
+		if v != nil {
+			*dst = int(min(max(*v, 0), int64(math.MaxInt32)))
+		}
+	}
+	over(&k.lineRate, info.Limits.LineRate)
+	over(&k.lineBurst, info.Limits.LineBurst)
+	over(&k.byteRate, info.Limits.ByteRate)
+	over(&k.byteBurst, info.Limits.ByteBurst)
+	over(&k.maxStreams, info.Limits.MaxStreams)
+	return k
+}
+
+// reconfigure changes the rate and burst in place: tokens are kept, clamped to the new burst.
+func reconfigureBucket(b **bucket, rate, burst int, now time.Time) {
+	if rate <= 0 {
+		*b = nil
+		return
+	}
+	if *b == nil {
+		*b = newBucket(rate, burst, now)
+		return
+	}
+	(*b).refill(now)
+	(*b).rate = float64(rate)
+	(*b).burst = float64(max(burst, rate))
+	(*b).tokens = min((*b).tokens, (*b).burst)
+}
+
+func (l *limiter) reconfigure(k keyLim, now time.Time) {
+	l.mu.Lock()
+	reconfigureBucket(&l.lines, k.lineRate, k.lineBurst, now)
+	reconfigureBucket(&l.data, k.byteRate, k.byteBurst, now)
+	l.mu.Unlock()
 }

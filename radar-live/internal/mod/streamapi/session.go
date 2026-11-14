@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"radarlive/internal/core"
 	"radarlive/internal/domain"
 )
 
@@ -28,6 +29,10 @@ type session struct {
 	keyID  keyID
 	lim    *limiter // this session's own buckets, nil when the limits are off
 	key    *limiter // the key's shared buckets
+
+	ring    string      // keyring id when the key comes from the keyring, else ""
+	use     *usageEntry // usage counters of the key, nil when keyusage-file is off
+	blocked atomic.Bool // the key was disabled, expired or removed while open
 
 	throttleLast  time.Time // when the reader last had to wait; only the reading goroutine
 	throttleSince time.Time // start of the current uninterrupted throttling; only the reading goroutine
@@ -130,7 +135,11 @@ func newRegistry(max int) *registry {
 	return &registry{max: max, sessions: map[string]*session{}, keys: map[keyID]*keyState{}}
 }
 
-func (r *registry) open(source string, rs domain.Ruleset, key keyID, now time.Time) (*session, error) {
+func (r *registry) open(source string, rs domain.Ruleset, key keyID, now time.Time, info ...core.KeyInfo) (*session, error) {
+	var ki core.KeyInfo
+	if len(info) > 0 {
+		ki = info[0]
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, busy := r.sessions[source]; busy {
@@ -142,26 +151,31 @@ func (r *registry) open(source string, rs domain.Ruleset, key keyID, now time.Ti
 	if r.lim.maxStreams > 0 && len(r.sessions) >= r.lim.maxStreams {
 		return nil, errTooStreams
 	}
-	ks := r.keyFor(key, now)
-	if r.lim.maxPerKey > 0 && ks.streams >= r.lim.maxPerKey {
+	kl := r.lim.keyLimits(ki, ki.FromKeyring)
+	ks := r.keyFor(key, now, kl)
+	if kl.maxStreams > 0 && ks.streams >= kl.maxStreams {
 		return nil, errKeyStreams
 	}
 	ks.streams++
-	s := &session{source: source, rs: rs, since: now, keyID: key, key: ks.lim, players: map[string]struct{}{},
+	s := &session{source: source, rs: rs, since: now, keyID: key, key: ks.lim, ring: ringID(ki), players: map[string]struct{}{},
 		lim: newLimiter(r.lim.lineRate, r.lim.lineBurst, r.lim.byteRate, r.lim.byteBurst, now)}
 	r.sessions[source] = s
 	return s, nil
 }
 
 // keyFor returns the key's state, creating it; the table is bounded by dropping idle keys.
-func (r *registry) keyFor(key keyID, now time.Time) *keyState {
+func (r *registry) keyFor(key keyID, now time.Time, kl keyLim) *keyState {
 	ks := r.keys[key]
 	if ks == nil {
 		if len(r.keys) >= maxTrackedKeys {
 			r.dropIdleKeys()
 		}
-		ks = &keyState{lim: newLimiter(r.lim.keyLineRate, r.lim.keyLineBurst, r.lim.keyByteRate, r.lim.keyBytes, now)}
+		ks = &keyState{lim: newLimiter(kl.lineRate, kl.lineBurst, kl.byteRate, kl.byteBurst, now), cur: kl}
 		r.keys[key] = ks
+	}
+	if ks.cur != kl {
+		ks.lim.reconfigure(kl, now)
+		ks.cur = kl
 	}
 	ks.used = now
 	return ks
@@ -201,4 +215,24 @@ func (r *registry) list(now time.Time) []sourceInfo {
 	r.mu.RUnlock()
 	sort.Slice(out, func(i, j int) bool { return out[i].Source < out[j].Source })
 	return out
+}
+
+// ringID is the keyring id of a session's key, "" for env keys and unidentified requests.
+func ringID(info core.KeyInfo) string {
+	if info.FromKeyring {
+		return info.ID
+	}
+	return ""
+}
+
+// applyLimits makes a changed keyring limit effective for a key that already has state (its open
+// streams share that limiter); tokens are kept, not refilled.
+func (r *registry) applyLimits(key keyID, lim core.KeyLimits, now time.Time) {
+	kl := r.lim.keyLimits(core.KeyInfo{Limits: lim}, true)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if ks := r.keys[key]; ks != nil && ks.cur != kl {
+		ks.lim.reconfigure(kl, now)
+		ks.cur = kl
+	}
 }

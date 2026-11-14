@@ -5,3 +5,8 @@
 # verification keeps all older backups. install.sh creates /var/backups/radar-live.
 # Restore: see deploy/README-xubuntu.md, section 6 (Backups, restore and data safety).
 17 3 * * * radar /usr/local/bin/radar-db backup --db-path /var/lib/radar-live/radar-live.db --keep 14 /var/backups/radar-live
+# Key manager backup (runs as root: the vault is not readable by the service user). radar-keys-backup (installed by
+# install.sh) copies keyring.json and keyvault.bin to /var/backups/radar-live/keys (root only, 0700) and keeps the newest 14.
+# It NEVER copies the sealing key keyvault.key: restoring the vault needs the backup AND the original
+# /var/lib/radar-keys/vault/keyvault.key (docs/keys.md).
+27 3 * * * root /usr/local/sbin/radar-keys-backup

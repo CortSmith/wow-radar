@@ -30,6 +30,7 @@ func (m *Module) handleLines(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer m.registry().close(s)
+	m.trackUsage(s)
 	if ended := m.throttleBatch(r.Context(), s, lines); ended != "" {
 		w.Header().Set("Retry-After", "5")
 		m.host.Audit.EmitRequest(r, core.AuditEvent{Event: "stream_refused", Class: "ingest", Reason: "rate"})
@@ -43,6 +44,13 @@ func (m *Module) handleLines(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		m.feed(r.Context(), s, line)
+	}
+	if s.use != nil {
+		var size int64
+		for _, l := range lines {
+			size += int64(len(l)) + 1
+		}
+		m.countUsage(s, int64(len(lines)), size)
 	}
 	core.WriteJSON(w, http.StatusOK, s.summary(m.now(), endedEOF))
 }

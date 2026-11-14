@@ -9,10 +9,12 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"radarlive/internal/core"
 )
@@ -24,8 +26,10 @@ const (
 	KeyViewFile       = "view-keys-file"
 	KeyIngestKeys     = "ingest-keys"
 	KeyIngestFile     = "ingest-keys-file"
+	KeyKeyringFile    = "keyring-file"
 	MinKeyLen         = 16
 	generatedBytes    = 32
+	idBytes           = 16
 	viewHeader        = "X-View-Key"
 	ingestHeader      = "X-Ingest-Key"
 	bearerPrefix      = "Bearer "
@@ -44,10 +48,26 @@ func GenerateKey() (string, error) {
 }
 
 // Module registers key authenticators for the view and ingest roles.
-type Module struct{ host *core.Host }
+type Module struct {
+	host *core.Host
+	poll time.Duration
+	ring *keyringAuth
+}
+
+// Option customises the module.
+type Option func(*Module)
+
+// WithKeyringPoll sets how often the keyring file is checked for changes (default 2s).
+func WithKeyringPoll(d time.Duration) Option { return func(m *Module) { m.poll = d } }
 
 // New returns the keys module.
-func New() *Module { return &Module{} }
+func New(opts ...Option) *Module {
+	m := &Module{poll: defaultKeyringPoll}
+	for _, o := range opts {
+		o(m)
+	}
+	return m
+}
 
 // Name implements core.Module.
 func (*Module) Name() string { return ModuleName }
@@ -60,12 +80,14 @@ func (m *Module) Init(host *core.Host) error {
 		{Key: KeyViewFile, Kind: core.KindString, Usage: "file with read keys, one per line"},
 		{Key: KeyIngestKeys, Kind: core.KindString, Secret: true, Usage: "comma-separated keys allowed to write pings"},
 		{Key: KeyIngestFile, Kind: core.KindString, Usage: "file with write keys, one per line"},
+		{Key: KeyKeyringFile, Kind: core.KindString, Usage: "keyring.json with managed write keys (reloaded when it changes); empty = off"},
 	} {
 		if err := host.Config.Declare(s); err != nil {
 			return fmt.Errorf("keys: %w", err)
 		}
 	}
 	host.Hooks.OnStart(m.load)
+	host.Hooks.OnStop(m.stopKeyring)
 	return nil
 }
 
@@ -88,7 +110,7 @@ func (m *Module) load(context.Context) error {
 			m.host.Log.Info("keys loaded", "role", r.name, "count", len(list))
 		}
 	}
-	return nil
+	return m.startKeyring()
 }
 
 // collect merges inline and file keys, validating each (errors never contain the key itself).
@@ -132,12 +154,35 @@ func newKeySet(header string, list []string) *keySet {
 	return s
 }
 
-// Authenticate implements core.Authenticator; it checks every stored hash so timing does not reveal which matched.
-func (s *keySet) Authenticate(r *http.Request) bool {
-	presented := r.Header.Get(s.header)
+// presentedKey returns the key a request carries in header or as a bearer token.
+func presentedKey(r *http.Request, header string) string {
+	presented := r.Header.Get(header)
 	if auth := r.Header.Get("Authorization"); presented == "" && strings.HasPrefix(auth, bearerPrefix) {
 		presented = strings.TrimSpace(strings.TrimPrefix(auth, bearerPrefix))
 	}
+	return presented
+}
+
+// Identify implements core.Identifier: like Authenticate, and it reports the matching key's id.
+func (s *keySet) Identify(r *http.Request) (core.KeyInfo, bool) {
+	presented := presentedKey(r, s.header)
+	sum := sha256.Sum256([]byte(presented))
+	match := 0
+	var matched [sha256.Size]byte
+	for _, h := range s.hashes {
+		eq := subtle.ConstantTimeCompare(sum[:], h[:])
+		match |= eq
+		subtle.ConstantTimeCopy(eq, matched[:], h[:])
+	}
+	if presented == "" || match != 1 {
+		return core.KeyInfo{}, false
+	}
+	return core.KeyInfo{ID: hex.EncodeToString(matched[:idBytes])}, true
+}
+
+// Authenticate implements core.Authenticator; it checks every stored hash so timing does not reveal which matched.
+func (s *keySet) Authenticate(r *http.Request) bool {
+	presented := presentedKey(r, s.header)
 	// A missing key takes the same path as a wrong one (hash, compare all), so timing does not
 	// separate "no key sent" from "wrong key".
 	sum := sha256.Sum256([]byte(presented))

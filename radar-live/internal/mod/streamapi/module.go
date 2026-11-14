@@ -36,6 +36,7 @@ const (
 	defaultLinesCount  = 20_000
 	defaultLinesBytes  = 8 << 20
 	defaultSource      = "default"
+	defaultKeyTick     = 2 * time.Second
 )
 
 var sourcePattern = regexp.MustCompile(`^[\w.:-]{1,48}$`)
@@ -47,7 +48,14 @@ type Module struct {
 	// sleep waits for the rate limiter; tests replace it.
 	sleep func(ctx, run context.Context, d time.Duration) error
 	reg   *registry
-	lim   limits
+	// keyTick is how often an open stream re-checks its keyring key; tests shorten it.
+	keyTick time.Duration
+	lim     limits
+	// usage counts per key id into keyusage-file; nil when the setting is empty.
+	usage      *usageTracker
+	usageEvery time.Duration
+	usageStop  context.CancelFunc
+	usageDone  chan struct{}
 
 	rejected atomic.Int64 // lines refused by the parsers (metric)
 
@@ -58,7 +66,7 @@ type Module struct {
 
 // New returns the module.
 func New() *Module {
-	return &Module{now: time.Now, sleep: sleepCtx, runCtx: context.Background()}
+	return &Module{now: time.Now, sleep: sleepCtx, runCtx: context.Background(), keyTick: defaultKeyTick, usageEvery: defaultUsageFlush}
 }
 
 // Name implements core.Module.
@@ -85,6 +93,7 @@ func (m *Module) Init(host *core.Host) error {
 		{Key: SettingMaxPerKey, Kind: core.KindInt, Default: fmt.Sprint(defaultMaxPerKey), Usage: "max concurrent streams per ingest key (0 = no limit)"},
 		{Key: SettingMaxStreams, Kind: core.KindInt, Default: fmt.Sprint(defaultMaxStreams), Usage: "max concurrent streams over all keys (0 = no limit)"},
 		{Key: SettingLineTimeout, Kind: core.KindDuration, Default: defaultLineTimeout.String(), Usage: "max time one line may take to arrive (slow-sender cut, 0 = off)"},
+		{Key: SettingKeyUsageFile, Kind: core.KindString, Usage: "write per-key last-seen and daily line/byte counts (ids only) to this JSON file for radar-keys (empty = off)"},
 	} {
 		if err := host.Config.Declare(s); err != nil {
 			return fmt.Errorf("streamapi settings: %w", err)
@@ -126,6 +135,24 @@ func (m *Module) Start(ctx context.Context) error {
 	m.mu.Lock()
 	m.runCtx = ctx
 	m.mu.Unlock()
+	if path := m.host.Config.String(SettingKeyUsageFile); path != "" {
+		m.usage = newUsageTracker(path, m.now)
+		ctx, stop := context.WithCancel(context.Background())
+		m.usageStop, m.usageDone = stop, make(chan struct{})
+		go func() {
+			defer close(m.usageDone)
+			m.usage.run(ctx, m.usageEvery, func(err error) { m.host.Log.Warn("streamapi: keyusage write failed", "err", err) })
+		}()
+	}
+	return nil
+}
+
+// Stop ends the usage flusher after one last write.
+func (m *Module) Stop(context.Context) error {
+	if m.usageStop != nil {
+		m.usageStop()
+		<-m.usageDone
+	}
 	return nil
 }
 
@@ -198,7 +225,8 @@ func refuse(w http.ResponseWriter) { w.Header().Set("Connection", "close") }
 
 // open registers a session or answers 409 / 429.
 func (m *Module) open(w http.ResponseWriter, r *http.Request, source string, rs domain.Ruleset) *session {
-	s, err := m.registry().open(source, rs, keyOf(r), m.now())
+	info, _ := core.KeyInfoFromContext(r.Context())
+	s, err := m.registry().open(source, rs, keyOf(r), m.now(), info)
 	if err != nil {
 		refuse(w)
 	}

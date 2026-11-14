@@ -3,7 +3,7 @@
   Cross-compiles radar-live into dist\ (static binaries, no cgo) and writes SHA256SUMS.
 
 .DESCRIPTION
-  radar-db, radar-ingest and radar-armory: linux/amd64 and linux/arm64.
+  radar-db, radar-ingest, radar-armory and radar-keys (the key manager, run with sudo): linux/amd64 and linux/arm64.
   radar-feed: windows/amd64 and linux/amd64.
   radar-client: windows/amd64 (windowed exe, no console) and linux/amd64 (console + browser).
   The deploy\ files (install.sh, units, env example, ...) are copied next to the binaries so that
@@ -55,6 +55,8 @@ $targets = @(
     @("radar-ingest", "linux", "arm64", ""),
     @("radar-armory", "linux", "amd64", ""),
     @("radar-armory", "linux", "arm64", ""),
+    @("radar-keys", "linux", "amd64", ""),
+    @("radar-keys", "linux", "arm64", ""),
     @("radar-feed", "windows", "amd64", ""),
     @("radar-feed", "linux", "amd64", ""),
     @("radar-client", "windows", "amd64", "-H=windowsgui"),
@@ -92,6 +94,7 @@ Get-ChildItem -File (Join-Path $root "deploy") | Where-Object { $_.Name -notlike
 }
 # The armory guide is installed next to the other docs (install.sh -> /usr/local/share/doc/radar-live).
 Copy-Item (Join-Path $root "docs/armory.md") (Join-Path $dist "armory.md")
+Copy-Item (Join-Path $root "docs/keys.md") (Join-Path $dist "keys.md")
 # The fail2ban filter and jail go in a sub-folder (used by install.sh --with-fail2ban).
 $fail2banSource = Join-Path $root "deploy\fail2ban"
 if (Test-Path $fail2banSource) {

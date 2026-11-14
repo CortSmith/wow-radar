@@ -15,6 +15,11 @@ ARMORY_ID_FILE=$SECRETS_DIR/armory-client-id
 ARMORY_KEY_FILE=$SECRETS_DIR/armory-api-key
 DATA_DIR=/var/lib/radar-live
 BACKUP_DIR=/var/backups/radar-live
+# Key manager layout (docs/keys.md).
+KEYS_DIR=/var/lib/radar-keys
+KEYRING_DIR=$KEYS_DIR/keyring
+USAGE_DIR=$KEYS_DIR/usage
+VAULT_DIR=$KEYS_DIR/vault
 LOG_DIR=/var/log/radar
 SVC_USER=radar
 public_ok=no
@@ -145,9 +150,9 @@ if have systemctl; then
     else
         skip "radar-armory.service is not installed"
     fi
-    # Only radar-db may write: radar-ingest must not list ReadWritePaths.
+    # radar-ingest may write only the per-key usage directory (keyusage.json); radar-db owns the data directory.
     rw=$(prop radar-ingest.service ReadWritePaths)
-    if [ -z "$rw" ]; then pass "radar-ingest has no writable path"; else fail "radar-ingest ReadWritePaths='$rw'"; fi
+    if [ "$rw" = "$USAGE_DIR" ]; then pass "radar-ingest writes only $USAGE_DIR"; else fail "radar-ingest ReadWritePaths='$rw', expected only $USAGE_DIR"; fi
 else
     fail "systemctl not found (is this the Xubuntu laptop?)"
 fi
@@ -180,6 +185,28 @@ for bin in /usr/local/bin/radar-db /usr/local/bin/radar-ingest; do
     check_stat "$bin" "755 root root" "binary"
 done
 if [ -e /usr/local/bin/radar-armory ]; then check_stat /usr/local/bin/radar-armory "755 root root" "binary"; fi
+check_stat /usr/local/bin/radar-keys "755 root root" "binary"
+# Key manager: the service user reads the keyring and writes only the usage file; the vault and its sealing key are root only.
+check_stat "$KEYS_DIR" "755 root root" "key manager dir"
+check_stat "$KEYRING_DIR" "750 root $SVC_USER" "keyring dir"
+check_stat "$KEYRING_DIR/keyring.json" "640 root $SVC_USER" "keyring file"
+check_stat "$USAGE_DIR" "700 $SVC_USER $SVC_USER" "key usage dir"
+check_stat "$VAULT_DIR" "700 root root" "key vault dir"
+for f in "$VAULT_DIR/keyvault.bin" "$VAULT_DIR/keyvault.key"; do
+    if [ -e "$f" ]; then check_stat "$f" "600 root root" "key vault file"; fi
+done
+if [ -e "$USAGE_DIR/keyusage.json" ]; then check_stat "$USAGE_DIR/keyusage.json" "600 $SVC_USER $SVC_USER" "key usage file"; fi
+if [ -e "$BACKUP_DIR/keys" ]; then check_stat "$BACKUP_DIR/keys" "700 root root" "key manager backup dir"; fi
+# The sealing key must never be in a backup.
+if ls "$BACKUP_DIR"/keys/keyvault.key* >/dev/null 2>&1; then fail "a copy of the vault sealing key is in $BACKUP_DIR/keys"; else pass "no vault sealing key in the backups"; fi
+if [ -r "$ENV_FILE" ]; then
+    for name in RADAR_KEYRING_FILE RADAR_KEYUSAGE_FILE; do
+        if [ -n "$(envval "$name")" ]; then pass "$name is set"; else fail "$name is not set in $ENV_FILE (radar-keys changes would not reach radar-ingest)"; fi
+    done
+    for name in RADAR_KEYVAULT_FILE RADAR_KEYVAULT_KEY_FILE; do
+        if [ -n "$(envval "$name")" ]; then fail "$name is set in $ENV_FILE, which the service user can read"; else pass "$name is not in the service's settings"; fi
+    done
+fi
 # Armory client id and secret files: only mode and owner are checked, the files are never read.
 if [ -d "$SECRETS_DIR" ]; then check_stat "$SECRETS_DIR" "750 root $SVC_USER" "secrets dir"; fi
 if [ -e "$ARMORY_KEY_FILE" ]; then check_stat "$ARMORY_KEY_FILE" "640 root $SVC_USER" "armory client secret file"; fi
