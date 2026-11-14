@@ -95,7 +95,7 @@ test('W3b: hovering a pie shows the zone name + exact friendly/neutral/hostile c
 
   canvas.dispatch('mousemove', { clientX: 400, clientY: 300 }); // the pie's exact centre
   assert.equal(tip.hidden, false);
-  assert.equal(tip.textContent, 'TestZone\n3 friendly\n1 neutral\n1 hostile');
+  assert.equal(tip.textContent, 'TestZone\n3 Alliance\n1 Horde (neutral)\n1 Horde (hostile)');
 
   canvas.dispatch('mousemove', { clientX: 700, clientY: 590 }); // nowhere near the pie
   assert.equal(tip.hidden, true);
@@ -167,11 +167,11 @@ test('pies: a single non-empty bucket paints one whole disc (no wedge, no separa
   assert.deepEqual(none.calls, []);
 });
 
-test('pies: the world section has a friendly / neutral / hostile legend', async () => {
+test('pies: the world section has an Alliance / Horde legend', async () => {
   const h = await boot({ withWorld: true, index: SQUARE_WORLD_INDEX });
   const items = h.world.findAll((n) => n.className === 'worldLegendItem');
-  assert.equal(items.length, 3);
-  assert.deepEqual(items.map((n) => n.textContent), ['Friendly', 'Neutral', 'Hostile']);
+  assert.equal(items.length, 2);
+  assert.deepEqual(items.map((n) => n.textContent), ['Alliance', 'Horde']);
   h.app.stop();
 });
 

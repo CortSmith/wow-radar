@@ -8,7 +8,7 @@ const GRID_STEPS = 10;
 const UNTRACKED_ALPHA = 0.35;
 const TRACK_RING_PX = 8;
 const DEFAULTS = {
-  bg: '#0a0d12', line: '#262d3a', friendly: '#3b82f6', hostile: '#ef4444', neutral: '#f59e0b', stale: '#4b5563', text: '#e6e9ef',
+  bg: '#0a0d12', line: '#262d3a', friendly: '#3b82f6', hostile: '#ef4444', neutral: '#ef4444', stale: '#4b5563', text: '#e6e9ef',
   'track-1': '#332288', 'track-2': '#88ccee', 'track-3': '#44aa99', 'track-4': '#117733',
   'track-5': '#999933', 'track-6': '#882255', 'track-7': '#aa4499', 'track-8': '#ddcc77',
 };

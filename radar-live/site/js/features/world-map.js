@@ -228,7 +228,7 @@ export function paintPie(g, chip, colors) {
 
 /** The small friendly / neutral / hostile colour key shown under the world canvases. */
 function buildLegend(ctx) {
-  const items = [['friendly', ctx.MSG.legendFriendly], ['neutral', ctx.MSG.legendNeutral], ['hostile', ctx.MSG.legendHostile]];
+  const items = [['friendly', ctx.MSG.legendFriendly], ['hostile', ctx.MSG.legendHostile]]; // neutral shares the Horde red
   const legend = ctx.el('div', { className: 'worldLegend muted' });
   for (const [kind, text] of items) {
     legend.appendChild(ctx.el('span', { className: 'worldLegendItem' },

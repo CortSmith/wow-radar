@@ -1,7 +1,7 @@
 :root{
   --bg:#0e1117;--panel:#161b24;--line:#262d3a;--text:#e6e9ef;--muted:#8b94a5;
   --friendly:#3b82f6;--hostile:#ef4444;--neutral:#ef4444;--unknown:#ef4444;--stale:#4b5563;--gold:#f5b301;
-  --world-neutral:#f59e0b; /* world-map pie slice for neutral contacts only; radar/sidebar still treat neutral as red */
+  --world-neutral:#ef4444; /* world-map pie slice for neutral contacts: same red as hostile (both are Horde) */
   /* Stage 11 U3: per-guid track colours (js/trackcolors.js). 8 colours from Paul Tol's colour-blind-safe
      "muted" qualitative palette, with any entry too close to the friendly/hostile/stale/gold tokens above
      dropped, so a tracked player's swatch/ring/line is never confused with those. This page has a single
